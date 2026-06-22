@@ -17,15 +17,10 @@
     --font-h:'Fredoka','PingFang SC','Microsoft YaHei',sans-serif;
     --font-b:'Nunito','PingFang SC','Microsoft YaHei',sans-serif;
   }
-  *{box-sizing:border-box}
-  html,body{margin:0}
-  body{
-    font-family:var(--font-b); color:var(--ink);
-    background-color:var(--bg);
-    background-image:radial-gradient(circle, rgba(35,32,46,.07) 1.4px, transparent 1.9px);
-    background-size:20px 20px;
-    min-height:100dvh; padding:18px clamp(14px,4vw,40px) 48px;
-  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:var(--font-b);color:var(--ink);background-color:var(--bg);
+    background-image:radial-gradient(circle, rgba(35,32,46,.07) 1.4px, transparent 1.9px);background-size:20px 20px;
+    min-height:100dvh;padding:18px clamp(14px,4vw,40px) 48px;}
   h1,h2,h3{font-family:var(--font-h);margin:0;line-height:1.15}
   .wrap{max-width:1280px;margin:0 auto}
   header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
@@ -117,10 +112,7 @@
       <i style="background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.6),rgba(255,255,255,0) 55%),#2D6CDF"></i>
       <i style="background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.6),rgba(255,255,255,0) 55%),#06A77D"></i>
     </div>
-    <div class="title-wrap">
-      <h1>拼豆智能助手</h1>
-      <div class="sub">图纸生成器 · 原型</div>
-    </div>
+    <div class="title-wrap"><h1>拼豆智能助手</h1><div class="sub">图纸生成器 · 原型</div></div>
     <div class="spacer"></div>
     <span class="badge">主导色提取 · 291 色</span>
   </header>
@@ -165,16 +157,12 @@
       </div>
 
       <div class="busy" id="busy"></div>
-
       <div class="canvas-scroll" id="scroll">
-        <div class="pick-prompt" id="pickPrompt">
-          <div class="big">选择一张图片开始</div>
-          <div class="small">点击左上「选择图片」· 任意照片或已有拼豆图纸均可</div>
-        </div>
+        <div class="pick-prompt" id="pickPrompt"><div class="big">选择一张图片开始</div><div class="small">点击左上「选择图片」· 任意照片或已有拼豆图纸均可</div></div>
         <canvas id="cv"></canvas>
       </div>
-      <div class="hint view-only">每豆带<b>真实色号</b>（当前品牌）· 主导色提取（非均值）· 291 色最近欧氏映射 · <b>导出 PNG 含每豆色号 + 采购清单</b></div>
-      <div class="hint track-only"><b>点击豆子标记已拼</b>（再点取消）· 开启「引导顺序」时，橙色高亮 = 推荐的下一颗 · 进度实时更新</div>
+      <div class="hint view-only">每豆带<b>真实色号</b>（当前品牌）· 主导色提取（非均值）· 291 色最近欧氏映射 · <b>每 10 格分区</b>（列 A/B/C × 行 1/2/3）辅助定位</div>
+      <div class="hint track-only"><b>点击豆子标记已拼</b>（再点取消）· 橙色高亮 = 推荐的下一颗 · "下一步"含<b>分区坐标</b>（如 C3 · A01）帮你快速定位</div>
     </section>
 
     <aside class="panel">
@@ -190,7 +178,7 @@
           <button class="opt" id="optSquare"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>方块</button>
         </div>
         <div class="opt-row" style="margin-top:10px">
-          <button class="opt on" id="optGrid"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>网格线</button>
+          <button class="opt on" id="optZones"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>分区</button>
           <button class="opt on" id="optCodes"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>色号标注</button>
         </div>
       </div>
@@ -209,7 +197,7 @@
   </div>
 
   <div class="footnote">
-    MVP 参考原型 · 对应 <code>technical-roadmap.md</code> 算法1（像素化·主导色）+ 算法2（色号映射·欧氏距离）。每颗豆标注当前品牌真实色号。数据来自 <code>../data/colorSystemMapping.json</code>（已内置到 <code>palette.js</code>）。
+    MVP 参考原型 · 对应 <code>technical-roadmap.md</code> 算法1（像素化·主导色）+ 算法2（色号映射·欧氏距离）。每颗豆标注当前品牌真实色号；每 10 格分区辅助定位。数据来自 <code>../data/colorSystemMapping.json</code>（内置到 <code>palette.js</code>）。
   </div>
 </div>
 
@@ -227,17 +215,21 @@
   const hexRgb=h=>{const n=parseInt(h.slice(1),16);return [(n>>16)&255,(n>>8)&255,n&255];};
   function nearestHex(r,g,b){let bi=0,bd=Infinity;for(let i=0;i<PAL_RGB.length;i++){const p=PAL_RGB[i],dr=p[0]-r,dg=p[1]-g,db=p[2]-b,d=dr*dr+dg*dg+db*db;if(d<bd){bd=d;bi=i;}}return PALETTE[bi];}
 
+  const ZONE=10;
   let srcData=null,srcW=0,srcH=0,rows=0,cols=0,hexGrid=[];
   let IMG_ASPECT=1, curImgURL=null;
   let sortedItems=[];
   let placed=[], routeOrder=[];
   let size=50, brand=BRANDS[0];
-  let beadMode=true, showGrid=true, showCodes=true;
+  let beadMode=true, showZones=true, showCodes=true;
   let beadPx=14, beadPxTrack=17;
   let mode='view', guide=true;
 
   const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
   const dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+
+  function geom(){const bp=(mode==='track')?beadPxTrack:beadPx;const M=showZones?Math.round(bp*1.7):0;return {bp,M};}
+  function zoneLabel(r,c){return String.fromCharCode(65+Math.floor(c/ZONE)%26)+(Math.floor(r/ZONE)+1);}
 
   function pixelize(){
     const longer=size;
@@ -267,10 +259,11 @@
   function computeRoute(){routeOrder=[];for(const [hex] of sortedItems){for(let r=0;r<rows;r++){const cells=[];for(let c=0;c<cols;c++) if(hexGrid[r][c]===hex) cells.push([r,c]);if(!cells.length) continue;if(r%2===1) cells.reverse();for(const rc of cells) routeOrder.push(rc);}}}
   function nextIdx(){for(let i=0;i<routeOrder.length;i++){const [r,c]=routeOrder[i];if(!placed[r][c]) return i;}return -1;}
 
-  function drawGrid(g,bp,withCode){
-    g.fillStyle='#ECE4D2'; g.fillRect(0,0,cols*bp,rows*bp);
+  function drawGrid(g,bp,withCode,withZones){
+    const M=withZones?Math.round(bp*1.7):0, ox=M, oy=M;
+    g.fillStyle='#ECE4D2'; g.fillRect(ox,oy,cols*bp,rows*bp);
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-      const hex=hexGrid[r][c], x=c*bp, y=r*bp;
+      const hex=hexGrid[r][c], x=ox+c*bp, y=oy+r*bp;
       if(beadMode){
         const cx=x+bp/2, cy=y+bp/2, rad=Math.max(2,bp*0.46);
         g.fillStyle=hex; g.beginPath(); g.arc(cx,cy,rad,0,Math.PI*2); g.fill();
@@ -280,7 +273,6 @@
         g.lineWidth=Math.max(0.5,bp*0.04); g.strokeStyle='rgba(35,32,46,0.35)';
         g.beginPath(); g.arc(cx,cy,rad,0,Math.PI*2); g.stroke();
       }else{ g.fillStyle=hex; g.fillRect(x+0.5,y+0.5,bp-1,bp-1); }
-      if(showGrid){g.strokeStyle='rgba(35,32,46,0.16)'; g.lineWidth=1; g.strokeRect(x+0.5,y+0.5,bp-1,bp-1);}
       if(withCode && bp>=12){
         const [R,GG,B]=hexRgb(hex), lum=(0.299*R+0.587*GG+0.114*B)/255;
         g.fillStyle=lum>0.55?'rgba(35,32,46,0.92)':'rgba(255,255,255,0.95)';
@@ -291,26 +283,38 @@
         g.fillText(code, x+bp/2, y+bp/2+0.5);
       }
     }
+    if(withZones){
+      g.strokeStyle='#23202E'; g.lineWidth=Math.max(2,bp*0.14); g.lineCap='square';
+      g.beginPath();
+      for(let i=0;i<=cols;i+=ZONE){const x=Math.round(ox+i*bp)+0.5; g.moveTo(x,oy); g.lineTo(x,oy+rows*bp);}
+      for(let i=0;i<=rows;i+=ZONE){const y=Math.round(oy+i*bp)+0.5; g.moveTo(ox,y); g.lineTo(ox+cols*bp,y);}
+      g.stroke();
+      g.lineWidth=Math.max(2.5,bp*0.16); g.strokeRect(ox+0.5,oy+0.5,cols*bp-1,rows*bp-1);
+      g.fillStyle='#23202E'; g.font='700 '+Math.floor(bp*0.8)+'px Fredoka,sans-serif'; g.textBaseline='middle';
+      for(let zc=0;zc*ZONE<cols;zc++){g.textAlign='center';g.fillText(String.fromCharCode(65+zc), ox+(zc*ZONE+ZONE/2)*bp, oy-M*0.5);}
+      for(let zr=0;zr*ZONE<rows;zr++){g.textAlign='center';g.fillText(String(zr+1), ox-M*0.5, oy+(zr*ZONE+ZONE/2)*bp);}
+    }
   }
   function drawProgressOverlay(g,bp){
+    const M=showZones?Math.round(bp*1.7):0, ox=M, oy=M;
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
       if(!placed[r][c]) continue;
-      const x=c*bp, y=r*bp;
+      const x=ox+c*bp, y=oy+r*bp;
       g.fillStyle='rgba(35,32,46,0.5)'; g.fillRect(x,y,bp,bp);
       g.strokeStyle='#fff'; g.lineWidth=Math.max(1.6,bp*0.16); g.lineCap='round'; g.lineJoin='round';
       const cx=x+bp/2, cy=y+bp/2, s=bp*0.2;
       g.beginPath(); g.moveTo(cx-s*1.1,cy); g.lineTo(cx-s*0.2,cy+s*0.9); g.lineTo(cx+s*1.2,cy-s*1.0); g.stroke();
     }
-    if(guide){const ni=nextIdx();for(let k=0;k<3&&ni+k<routeOrder.length;k++){const [r,c]=routeOrder[ni+k];const x=c*bp,y=r*bp;g.strokeStyle='#F77F00';g.lineWidth=(k===0?Math.max(2.5,bp*0.2):Math.max(1.5,bp*0.1));g.globalAlpha=k===0?1:0.4;g.strokeRect(x+1,y+1,bp-2,bp-2);}g.globalAlpha=1;}
+    if(guide){const ni=nextIdx();for(let k=0;k<3&&ni+k<routeOrder.length;k++){const [r,c]=routeOrder[ni+k];const x=ox+c*bp,y=oy+r*bp;g.strokeStyle='#F77F00';g.lineWidth=(k===0?Math.max(2.5,bp*0.2):Math.max(1.5,bp*0.1));g.globalAlpha=k===0?1:0.4;g.strokeRect(x+1,y+1,bp-2,bp-2);}g.globalAlpha=1;}
   }
   function render(){
     if(!srcData){cv.width=1;cv.height=1;return;}
     document.getElementById('pickPrompt').style.display='none';
-    const bp=(mode==='track')?beadPxTrack:beadPx;
-    const W=cols*bp, H=rows*bp;
+    const {bp,M}=geom();
+    const W=cols*bp+2*M, H=rows*bp+2*M;
     cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
     ctx.setTransform(dpr,0,0,dpr,0,0);
-    drawGrid(ctx,bp,showCodes);
+    drawGrid(ctx,bp,showCodes,showZones);
     if(mode==='track') drawProgressOverlay(ctx,bp);
   }
   function renderLegend(){
@@ -329,7 +333,7 @@
     document.getElementById('progPct').textContent=pct+'%'; document.getElementById('progFill').style.width=pct+'%';
     const chip=document.getElementById('progChip'); const ni=nextIdx();
     if(ni<0){chip.innerHTML='全部完成';chip.style.animation='none';}
-    else{const [r,c]=routeOrder[ni],hex=hexGrid[r][c];const code=BRAND_CODES[brand][hex];chip.style.animation='';chip.innerHTML=`<span class="mini-swatch" style="background:${hex}"></span>${code}`;}
+    else{const [r,c]=routeOrder[ni],hex=hexGrid[r][c];const code=BRAND_CODES[brand][hex];chip.style.animation='';chip.innerHTML=`<span class="mini-swatch" style="background:${hex}"></span>${zoneLabel(r,c)} · ${code}`;}
   }
   function setBusy(p){document.getElementById('busy').style.width=(p*100)+'%';}
   function regen(){if(!srcData)return;setBusy(.3);requestAnimationFrame(()=>setTimeout(()=>{pixelize();computeCounts();computeRoute();setBusy(.8);render();renderLegend();if(mode==='track')updateProgress();setBusy(0);},10));}
@@ -337,7 +341,7 @@
 
   function exportPNG(){
     document.fonts.ready.then(()=>{
-      const bp=30, gridW=cols*bp, gridH=rows*bp, titleH=46, itemW=176, itemH=42;
+      const bp=30, M=Math.round(bp*1.7), gridW=cols*bp+2*M, gridH=rows*bp+2*M, titleH=46, itemW=176, itemH=42;
       const legendCols=Math.max(1,Math.min(sortedItems.length,Math.floor((gridW+40)/itemW)));
       const legendRows=Math.ceil(sortedItems.length/legendCols);
       const W=Math.max(gridW, legendCols*itemW)+40, H=titleH+gridH+legendRows*itemH+34+40;
@@ -346,7 +350,7 @@
       g.fillStyle='#FBF6EC'; g.fillRect(0,0,W,H);
       g.fillStyle='#23202E'; g.textAlign='left'; g.textBaseline='alphabetic'; g.font='700 24px Fredoka,sans-serif';
       g.fillText('拼豆图纸 · '+brand+' · '+cols+'×'+rows+' · '+sortedItems.length+' 色 · '+(rows*cols)+' 颗', 20, 32);
-      g.save(); g.translate(Math.floor((W-gridW)/2), titleH+6); drawGrid(g,bp,true); g.restore();
+      g.save(); g.translate(Math.floor((W-gridW)/2), titleH+6); drawGrid(g,bp,true,true); g.restore();
       let ly=titleH+gridH+30;
       g.fillStyle='#23202E'; g.font='700 16px Fredoka,sans-serif'; g.fillText('采购清单（色号 → HEX → 数量）', 20, ly); ly+=12;
       sortedItems.forEach(([hex,n],i)=>{
@@ -363,13 +367,11 @@
     });
   }
 
-  // 文件选择（含 EXIF 旋转校正）
   function ingest(bmp){
     const sc=document.createElement('canvas'); sc.width=bmp.width; sc.height=bmp.height;
     sc.getContext('2d').drawImage(bmp,0,0); srcW=sc.width; srcH=sc.height;
     srcData=sc.getContext('2d').getImageData(0,0,srcW,srcH).data;
-    IMG_ASPECT=srcW/srcH;
-    regen();
+    IMG_ASPECT=srcW/srcH; regen();
   }
   document.getElementById('filePick').addEventListener('change',e=>{
     const file=e.target.files&&e.target.files[0]; if(!file) return;
@@ -386,9 +388,9 @@
   document.getElementById('modeToggle').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;setMode(b.dataset.mode);});
   cv.addEventListener('click',e=>{
     if(mode!=='track'||!srcData) return;
-    const rect=cv.getBoundingClientRect();
-    const c=Math.floor((e.clientX-rect.left)/(rect.width/cols));
-    const r=Math.floor((e.clientY-rect.top)/(rect.height/rows));
+    const {bp,M}=geom(); const rect=cv.getBoundingClientRect();
+    const c=Math.floor((e.clientX-rect.left-M)/bp);
+    const r=Math.floor((e.clientY-rect.top-M)/bp);
     if(r<0||r>=rows||c<0||c>=cols) return;
     placed[r][c]=!placed[r][c]; render(); updateProgress();
   });
@@ -402,7 +404,7 @@
   brandRow.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;brand=b.dataset.brand;[...brandRow.children].forEach(x=>x.classList.toggle('on',x===b));render();renderLegend();if(mode==='track')updateProgress();});
   document.getElementById('optBead').addEventListener('click',function(){beadMode=true;this.classList.add('on');document.getElementById('optSquare').classList.remove('on');render();});
   document.getElementById('optSquare').addEventListener('click',function(){beadMode=false;this.classList.add('on');document.getElementById('optBead').classList.remove('on');render();});
-  document.getElementById('optGrid').addEventListener('click',function(){showGrid=!showGrid;this.classList.toggle('on',showGrid);render();});
+  document.getElementById('optZones').addEventListener('click',function(){showZones=!showZones;this.classList.toggle('on',showZones);render();});
   document.getElementById('optCodes').addEventListener('click',function(){showCodes=!showCodes;this.classList.toggle('on',showCodes);render();});
   const pop=document.getElementById('origPop');
   document.getElementById('btnOrig').addEventListener('click',()=>{if(curImgURL)pop.classList.add('show');});
