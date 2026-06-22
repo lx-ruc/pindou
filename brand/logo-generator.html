@@ -69,8 +69,8 @@
     <span class="tool-label">像素网格</span>
     <div class="seg" id="gridSeg">
       <button data-g="32">32 粗</button>
-      <button data-g="48" class="active">48 平衡</button>
-      <button data-g="64">64 清晰</button>
+      <button data-g="48">48 平衡</button>
+      <button data-g="64" class="active">64 清晰</button>
     </div>
     <label style="font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none"><input type="checkbox" id="circleChk" style="width:16px;height:16px;accent-color:var(--orange)"> 模拟圆形裁切</label>
   </div>
@@ -92,7 +92,7 @@ const MODES={
   orange:{label:'主色橙',  sub:'拼豆橙 #F77F00（主色）',                colors:['#F77F00','#F77F00','#F77F00','#F77F00']}
 };
 
-let curGrid=48, mask=null;
+let curGrid=64, mask=null;
 
 function buildMask(N){
   const HI=N*10;
