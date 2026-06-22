@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>智能拼豆 · 像素 Logo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FBF6EC; --bg-2:#F3EAD6; --surface:#FFFFFF;
+    --ink:#23202E; --ink-soft:#615C72;
+    --orange:#F77F00; --teal:#06A77D;
+    --b:3px solid var(--ink); --sh:6px 6px 0 var(--ink); --sh-sm:3px 3px 0 var(--ink);
+    --font-h:'Fredoka','PingFang SC','Microsoft YaHei',sans-serif;
+    --font-b:'Nunito','PingFang SC','Microsoft YaHei',sans-serif;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:var(--font-b);color:var(--ink);
+    background-color:var(--bg);
+    background-image:radial-gradient(circle, rgba(35,32,46,.07) 1.4px, transparent 1.9px);background-size:20px 20px;
+    min-height:100dvh;padding:22px clamp(14px,4vw,40px) 48px;}
+  .wrap{max-width:1100px;margin:0 auto}
+  header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .logo{display:flex;gap:5px}
+  .logo i{width:18px;height:18px;border-radius:4px;border:2px solid var(--ink);box-shadow:1.5px 1.5px 0 var(--ink)}
+  h1{font-family:var(--font-h);font-size:clamp(22px,3.6vw,32px);margin:0;letter-spacing:.5px}
+  .sub{font-size:13px;color:var(--ink-soft);font-weight:700;margin:4px 0 18px}
+  .tag{font-family:var(--font-h);font-weight:600;font-size:11px;padding:3px 9px;background:var(--ink);color:#fff;border-radius:20px;margin-left:8px;vertical-align:middle}
+  .controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+  .seg{display:inline-flex;border:var(--b);border-radius:12px;overflow:hidden;background:var(--bg-2);box-shadow:var(--sh-sm)}
+  .seg button{font-family:var(--font-h);font-weight:600;font-size:14px;border:0;border-right:var(--b);background:transparent;color:var(--ink);padding:9px 16px;cursor:pointer;transition:background .12s}
+  .seg button:last-child{border-right:0}
+  .seg button.active{background:var(--ink);color:#fff}
+  .tool-label{font-weight:800;font-size:13px;color:var(--ink-soft);margin-right:2px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  @media(max-width:880px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:var(--b);border-radius:18px;box-shadow:var(--sh);padding:22px 18px;display:flex;flex-direction:column;align-items:center;gap:14px}
+  .av{border-radius:22%;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);image-rendering:pixelated;display:block}
+  .sizes{display:flex;align-items:flex-end;gap:12px}
+  .name{font-family:var(--font-h);font-weight:600;font-size:16px}
+  .name small{color:var(--ink-soft);font-weight:700;font-size:12px;display:block;margin-top:2px}
+  .download{font-family:var(--font-h);font-weight:600;font-size:13px;background:var(--orange);color:#fff;
+    border:var(--b);border-radius:10px;padding:8px 14px;cursor:pointer;box-shadow:var(--sh-sm);
+    transition:transform .08s,box-shadow .08s;display:inline-flex;align-items:center;gap:6px}
+  .download:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
+  .download:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+  .download svg{width:14px;height:14px;stroke:currentColor}
+  .footnote{margin-top:26px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.7;text-align:center}
+  .footnote code{background:var(--bg-2);padding:1px 6px;border-radius:5px;border:1.5px solid var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo" aria-hidden="true">
+      <i style="background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.6),rgba(255,255,255,0) 55%),#F77F00"></i>
+      <i style="background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.6),rgba(255,255,255,0) 55%),#E63946"></i>
+      <i style="background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.6),rgba(255,255,255,0) 55%),#2D6CDF"></i>
+      <i style="background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.6),rgba(255,255,255,0) 55%),#06A77D"></i>
+    </div>
+    <h1>智能拼豆<span class="tag">像素 Logo</span></h1>
+  </header>
+  <div class="sub">「智能拼豆」四字 2×2 排布，canvas 渲染后采样像素化（复用图纸生成器算法）· 底色米白，字色三种主题处理 · 与小程序主题一致</div>
+
+  <div class="controls">
+    <span class="tool-label">像素网格</span>
+    <div class="seg" id="gridSeg">
+      <button data-g="32">32 粗</button>
+      <button data-g="48" class="active">48 平衡</button>
+      <button data-g="64">64 清晰</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="footnote">
+    文字 → 像素采样阈值为"该格深色像素占比 > 30% 即为字"。导出 512×512 squircle PNG。底色 <code>#FBF6EC</code> 米白（同小程序），字色取主题色。
+  </div>
+</div>
+
+<script>
+const BG='#FBF6EC';
+const CHARS=['智','能','拼','豆'];
+const POS=[[0,0],[1,0],[0,1],[1,1]]; // [col,row] per char
+const MODES={
+  ink:   {label:'墨黑字',  sub:'墨黑 #23202E（同 App 正文）',          colors:['#23202E','#23202E','#23202E','#23202E']},
+  brand: {label:'四色字',  sub:'智橙·能红·拼蓝·豆绿（品牌四色）',      colors:['#F77F00','#E63946','#2D6CDF','#06A77D']},
+  orange:{label:'主色橙',  sub:'拼豆橙 #F77F00（主色）',                colors:['#F77F00','#F77F00','#F77F00','#F77F00']}
+};
+
+let curGrid=48, mask=null;
+
+function buildMask(N){
+  const HI=N*10;
+  const c=document.createElement('canvas'); c.width=HI; c.height=HI;
+  const x=c.getContext('2d');
+  x.fillStyle=BG; x.fillRect(0,0,HI,HI);
+  x.fillStyle='#23202E';
+  x.textAlign='center'; x.textBaseline='middle';
+  const cell=HI/2, fs=Math.round(cell*0.74);
+  x.font='800 '+fs+'px "PingFang SC","Heiti SC","Microsoft YaHei",sans-serif';
+  CHARS.forEach((ch,i)=>{x.fillText(ch, POS[i][0]*cell+cell/2, POS[i][1]*cell+cell/2 + fs*0.04);});
+  const img=x.getImageData(0,0,HI,HI).data;
+  const step=HI/N, sub=Math.max(1,Math.floor(step/4));
+  const m=[];
+  for(let r=0;r<N;r++){
+    const row=[];
+    for(let cc=0;cc<N;cc++){
+      let dark=0,cnt=0;
+      const sx=Math.floor(cc*step), sy=Math.floor(r*step);
+      for(let yy=0;yy<step;yy+=sub)for(let xx=0;xx<step;xx+=sub){
+        const idx=((sy+yy)*HI+(sx+xx))*4;
+        const lum=img[idx]*0.299+img[idx+1]*0.587+img[idx+2]*0.114;
+        cnt++; if(lum<150) dark++;
+      }
+      row.push(dark/cnt>0.30);
+    }
+    m.push(row);
+  }
+  return m;
+}
+
+function drawAvatar(cv,m,modeKey,disp){
+  const Nn=m.length, s=disp/Nn;
+  cv.width=disp; cv.height=disp;
+  const x=cv.getContext('2d'); x.imageSmoothingEnabled=false;
+  x.fillStyle=BG; x.fillRect(0,0,disp,disp);
+  const colors=MODES[modeKey].colors;
+  for(let r=0;r<Nn;r++)for(let c=0;c<Nn;c++){
+    if(!m[r][c]) continue;
+    const ci=(r>=Nn/2?2:0)+(c>=Nn/2?1:0); // 0智 1能 2拼 3豆
+    x.fillStyle=colors[ci]; x.fillRect(c*s,r*s,s,s);
+  }
+}
+
+function renderAll(){
+  mask=buildMask(curGrid);
+  const grid=document.getElementById('grid'); grid.innerHTML='';
+  Object.keys(MODES).forEach(k=>{
+    const mode=MODES[k];
+    const card=document.createElement('div'); card.className='card';
+    const big=document.createElement('canvas'); big.className='av'; drawAvatar(big,mask,k,176);
+    const sizes=document.createElement('div'); sizes.className='sizes';
+    [88,56,40].forEach(d=>{const c=document.createElement('canvas');c.className='av';drawAvatar(c,mask,k,d);sizes.appendChild(c);});
+    const name=document.createElement('div'); name.className='name'; name.innerHTML=mode.label+'<small>'+mode.sub+'</small>';
+    const dl=document.createElement('button'); dl.className='download';
+    dl.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>下载 512 PNG';
+    dl.onclick=()=>download(mask,k);
+    card.appendChild(big); card.appendChild(sizes); card.appendChild(name); card.appendChild(dl);
+    grid.appendChild(card);
+  });
+}
+
+function download(m,modeKey){
+  const disp=512, Nn=m.length, S=disp/Nn;
+  const base=document.createElement('canvas'); base.width=disp; base.height=disp; drawAvatar(base,m,modeKey,disp);
+  const out=document.createElement('canvas'); out.width=disp; out.height=disp;
+  const o=out.getContext('2d'); o.imageSmoothingEnabled=false; const rad=disp*0.22;
+  o.beginPath();
+  o.moveTo(rad,0); o.lineTo(disp-rad,0); o.arcTo(disp,0,disp,rad,rad);
+  o.lineTo(disp,disp-rad); o.arcTo(disp,disp,disp-rad,disp,rad);
+  o.lineTo(rad,disp); o.arcTo(0,disp,0,disp-rad,rad);
+  o.lineTo(0,rad); o.arcTo(0,0,rad,0,rad); o.closePath(); o.clip();
+  o.drawImage(base,0,0);
+  const a=document.createElement('a'); a.download='pindou-logo-'+modeKey+'-'+Nn+'.png'; a.href=out.toDataURL('image/png'); a.click();
+}
+
+document.getElementById('gridSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;curGrid=+b.dataset.g;[...e.currentTarget.children].forEach(x=>x.classList.toggle('active',x===b));renderAll();});
+
+document.fonts.ready.then(renderAll).catch(renderAll);
+</script>
+</body>
+</html>
