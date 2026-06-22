@@ -70,7 +70,7 @@
     <div class="seg" id="gridSeg">
       <button data-g="32">32 粗</button>
       <button data-g="48">48 平衡</button>
-      <button data-g="64" class="active">64 清晰</button>
+      <button data-g="64">64</button><button data-g="96" class="active">96 清晰</button>
     </div>
     <label style="font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none"><input type="checkbox" id="circleChk" style="width:16px;height:16px;accent-color:var(--orange)"> 模拟圆形裁切</label>
   </div>
@@ -92,7 +92,7 @@ const MODES={
   orange:{label:'主色橙',  sub:'拼豆橙 #F77F00（主色）',                colors:['#F77F00','#F77F00','#F77F00','#F77F00']}
 };
 
-let curGrid=64, mask=null;
+let curGrid=96, mask=null;
 
 function buildMask(N){
   const HI=N*10;
@@ -101,9 +101,10 @@ function buildMask(N){
   x.fillStyle=BG; x.fillRect(0,0,HI,HI);
   x.fillStyle='#23202E';
   x.textAlign='center'; x.textBaseline='middle';
-  const M=0.16, lo=HI*M, inner=HI*(1-2*M), cell=inner/2, fs=Math.round(cell*0.74);
+  const M=0.16, lo=HI*M, inner=HI*(1-2*M), cell=inner/2, fs=Math.round(cell*0.80);
   x.font='800 '+fs+'px "PingFang SC","Heiti SC","Microsoft YaHei",sans-serif';
-  CHARS.forEach((ch,i)=>{x.fillText(ch, lo+POS[i][0]*cell+cell/2, lo+POS[i][1]*cell+cell/2 + fs*0.04);});
+  const sw=Math.max(1,Math.round(fs*0.05)); x.lineWidth=sw;
+  CHARS.forEach((ch,i)=>{x.strokeStyle='#23202E'; x.fillStyle='#23202E'; x.font='800 '+fs+'px "PingFang SC","Heiti SC","Microsoft YaHei",sans-serif'; x.fillText(ch, lo+POS[i][0]*cell+cell/2, lo+POS[i][1]*cell+cell/2 + fs*0.04); x.strokeText(ch, lo+POS[i][0]*cell+cell/2, lo+POS[i][1]*cell+cell/2 + fs*0.04);});
   const img=x.getImageData(0,0,HI,HI).data;
   const step=HI/N, sub=Math.max(1,Math.floor(step/4));
   const m=[];
