@@ -166,11 +166,6 @@
     </section>
 
     <aside class="panel">
-      <div class="card pad">
-        <h3 class="group-title">品牌 · 色号体系</h3>
-        <div class="brand-row" id="brandRow"></div>
-        <div class="hint" style="margin:10px 0 0">切换品牌 <b>豆面色号与采购清单同步刷新</b>，颜色不变（即时）</div>
-      </div>
       <div class="card pad view-only">
         <h3 class="group-title">显示选项</h3>
         <div class="opt-row">
@@ -216,7 +211,7 @@
   let IMG_ASPECT=1, curImgURL=null;
   let sortedItems=[];
   let placed=[], routeOrder=[];
-  let size=50, brand=BRANDS[0];
+  let size=50; const brand='MARD';
   let showZones=true, showCodes=true;
   let beadPx=14, beadPxTrack=17;
   let mode='view', guide=true;
@@ -387,9 +382,6 @@
   document.getElementById('beadZoomT').addEventListener('input',e=>{beadPxTrack=+e.target.value;render();});
   document.getElementById('guideChk').addEventListener('change',e=>{guide=e.target.checked;render();});
   document.getElementById('btnReset').addEventListener('click',()=>{for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)placed[r][c]=false;render();updateProgress();});
-  const brandRow=document.getElementById('brandRow');
-  BRANDS.forEach((b,i)=>{const btn=document.createElement('button');btn.className='opt'+(i===0?' on':'');btn.textContent=b;btn.dataset.brand=b;brandRow.appendChild(btn);});
-  brandRow.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;brand=b.dataset.brand;[...brandRow.children].forEach(x=>x.classList.toggle('on',x===b));render();renderLegend();if(mode==='track')updateProgress();});
   document.getElementById('optZones').addEventListener('click',function(){showZones=!showZones;this.classList.toggle('on',showZones);render();});
   document.getElementById('optCodes').addEventListener('click',function(){showCodes=!showCodes;this.classList.toggle('on',showCodes);render();});
   const pop=document.getElementById('origPop');

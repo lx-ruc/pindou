@@ -1,21 +1,21 @@
 ## ADDED Requirements
 
-### Requirement: 5 品牌色号体系
-系统 SHALL 加载 `data/colorSystemMapping.json`（291 HEX × 5 品牌），并通过 HEX 查询指定品牌的色号。MARD / COCO / 漫漫 / 盼盼 / 咪小窝 五个品牌的色号体系相互独立、不可混用。
+### Requirement: 色号体系（MVP：MARD）
+系统 SHALL 以 MARD 色号体系为 MVP 的默认与唯一展示品牌；数据层加载 `data/colorSystemMapping.json`（291 HEX × 5 品牌）备用，其他品牌（COCO/漫漫/盼盼/咪小窝）的切换 UI 在后续版本提供。五个品牌色号相互独立、不可混用。
 
-#### Scenario: 按 HEX 查询品牌色号
+#### Scenario: 按 HEX 查询 MARD 色号
 - **WHEN** 系统以 HEX "#FAF4C8" 查询 MARD 品牌
 - **THEN** 返回色号 "A01"
 
-#### Scenario: 品牌间色号不通用
-- **WHEN** 同一 HEX 在不同品牌下查询
-- **THEN** 各返回该品牌独立色号（MARD A01 ≠ COCO E02 ≠ 漫漫 E2 ≠ 盼盼 65 ≠ 咪小窝 77），系统不跨品牌复用色号
+#### Scenario: MVP 仅暴露 MARD
+- **WHEN** 用户在 MVP 版本生成图纸
+- **THEN** 豆面色号与采购清单均使用 MARD 色号；界面不提供品牌切换
 
-### Requirement: 品牌切换实时重映射
-系统 SHALL 在用户切换品牌时，仅对色号网格重新映射色号、不重新像素化；切换在 500ms 内完成。
+### Requirement: 多品牌切换（后续版本，非 MVP）
+系统 SHALL 在后续版本支持品牌切换：仅对色号网格重新映射色号、不重新像素化，500ms 内完成；五个品牌色号不可混用。MVP 不实现此切换 UI。
 
-#### Scenario: 切换品牌只刷新色号
-- **WHEN** 用户在已生成图纸上将品牌从 MARD 切到 COCO
+#### Scenario: 切换品牌只刷新色号（后续版本）
+- **WHEN** 用户在后续版本将品牌从 MARD 切到 COCO
 - **THEN** 豆面颜色不变，豆面色号与采购清单同步刷新为 COCO 色号（不重新像素化）
 
 ### Requirement: MVP 仅全色板
