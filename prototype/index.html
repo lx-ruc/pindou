@@ -20,82 +20,79 @@
   *{box-sizing:border-box} html,body{margin:0}
   body{font-family:var(--font-b);color:var(--ink);background-color:var(--bg);
     background-image:radial-gradient(circle, rgba(35,32,46,.07) 1.4px, transparent 1.9px);background-size:20px 20px;
-    min-height:100dvh;padding:18px clamp(14px,4vw,40px) 48px;}
+    min-height:100dvh;padding:14px clamp(12px,3vw,32px) 24px;}
   h1,h2,h3{font-family:var(--font-h);margin:0;line-height:1.15}
-  .wrap{max-width:1280px;margin:0 auto}
-  header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .wrap{max-width:1400px;margin:0 auto}
+  header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
   .logo{display:flex;gap:5px}
   .logo i{width:16px;height:16px;border-radius:4px;border:2px solid var(--ink);box-shadow:1.5px 1.5px 0 var(--ink)}
-  .title-wrap h1{font-size:clamp(20px,3.4vw,30px);letter-spacing:.5px}
-  .title-wrap .sub{font-size:13px;color:var(--ink-soft);font-weight:700;margin-top:2px}
+  .title-wrap h1{font-size:clamp(20px,3.2vw,28px);letter-spacing:.5px}
+  .title-wrap .sub{font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:2px}
   .spacer{flex:1}
-  .badge{font-family:var(--font-h);font-weight:600;font-size:12px;padding:6px 12px;background:var(--ink);color:#fff;border-radius:30px;box-shadow:var(--sh-sm)}
+  .badge{font-family:var(--font-h);font-weight:600;font-size:11px;padding:5px 11px;background:var(--ink);color:#fff;border-radius:30px;box-shadow:var(--sh-sm)}
   .card{background:var(--surface);border:var(--b);border-radius:var(--radius);box-shadow:var(--sh)}
-  .card.pad{padding:16px}
-  .layout{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:20px;align-items:start}
-  @media(max-width:960px){.layout{grid-template-columns:1fr}}
-  .canvas-card{padding:14px}
-  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .card.pad{padding:14px}
+  .layout{display:flex;flex-direction:column;gap:14px}
+  .canvas-card{padding:12px}
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
   .seg,.mode-toggle{display:inline-flex;border:var(--b);border-radius:12px;overflow:hidden;background:var(--bg-2);box-shadow:var(--sh-sm)}
-  .seg button,.mode-toggle button{font-family:var(--font-h);font-weight:600;font-size:14px;border:0;border-right:var(--b);background:transparent;color:var(--ink);padding:9px 14px;cursor:pointer;transition:background .12s;display:inline-flex;align-items:center;gap:6px}
+  .seg button,.mode-toggle button{font-family:var(--font-h);font-weight:600;font-size:14px;border:0;border-right:var(--b);background:transparent;color:var(--ink);padding:8px 13px;cursor:pointer;transition:background .12s;display:inline-flex;align-items:center;gap:6px}
   .seg button:last-child,.mode-toggle button:last-child{border-right:0}
   .seg button.active{background:var(--ink);color:#fff}
   .mode-toggle button.active{background:var(--orange);color:#fff}
   .mode-toggle button svg,.seg button svg{width:15px;height:15px;stroke:currentColor}
-  .tool-label{font-weight:800;font-size:13px;color:var(--ink-soft);margin-right:2px}
-  input[type=range]{accent-color:var(--orange);width:120px;vertical-align:middle}
-  .progress-strip{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;width:100%}
-  .prog-text{font-family:var(--font-h);font-weight:700;font-size:16px;white-space:nowrap}
-  .prog-text b{color:var(--orange);font-size:26px}
-  .prog-bar{flex:1;min-width:150px;height:24px;background:var(--bg-2);border:var(--b);border-radius:12px;overflow:hidden;box-shadow:var(--sh-sm)}
+  .tool-label{font-weight:800;font-size:12.5px;color:var(--ink-soft);margin-right:2px}
+  input[type=range]{accent-color:var(--orange);width:110px;vertical-align:middle}
+  .progress-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;width:100%}
+  .prog-text{font-family:var(--font-h);font-weight:700;font-size:15px;white-space:nowrap}
+  .prog-text b{color:var(--orange);font-size:24px}
+  .prog-bar{flex:1;min-width:140px;height:22px;background:var(--bg-2);border:var(--b);border-radius:11px;overflow:hidden;box-shadow:var(--sh-sm)}
   .prog-fill{height:100%;width:0;background:linear-gradient(90deg,var(--orange),#FFB169);transition:width .25s}
-  .prog-next{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+  .prog-next{font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:8px}
   .prog-chip{display:inline-flex;align-items:center;gap:7px;background:var(--ink);color:#fff;border-radius:9px;padding:5px 11px;font-family:var(--font-h);animation:pulse 1.4s ease-in-out infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(247,127,0,.5)}50%{box-shadow:0 0 0 6px rgba(247,127,0,0)}}
   .mini-swatch{width:14px;height:14px;border-radius:3px;border:1.5px solid #fff;display:inline-block}
-  .guide{font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+  .guide{font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
   .guide input{width:16px;height:16px;accent-color:var(--orange)}
-  .canvas-scroll{background:radial-gradient(circle, rgba(35,32,46,.10) 1.1px, transparent 1.6px) 0 0/14px 14px, var(--bg-2);border:var(--b);border-radius:12px;overflow:auto;max-height:70vh;padding:14px;display:flex;justify-content:center;box-shadow:inset 0 0 0 2px rgba(255,255,255,.5);position:relative}
+  .canvas-scroll{background:radial-gradient(circle, rgba(35,32,46,.10) 1.1px, transparent 1.6px) 0 0/14px 14px, var(--bg-2);
+    border:var(--b);border-radius:12px;overflow:auto;min-height:54vh;max-height:72vh;padding:12px;display:flex;justify-content:center;align-items:center;box-shadow:inset 0 0 0 2px rgba(255,255,255,.5);position:relative}
   canvas{image-rendering:pixelated;display:block;margin:auto;box-shadow:var(--sh);border:var(--b);border-radius:6px;background:var(--bg-2)}
   html[data-mode="track"] canvas{cursor:pointer}
-  .pick-prompt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;color:var(--ink-soft);font-weight:700;pointer-events:none}
-  .pick-prompt .big{font-family:var(--font-h);font-size:22px;color:var(--ink)}
-  .pick-prompt .small{font-size:13px}
-  .hint{margin:10px 2px 0;font-size:12.5px;color:var(--ink-soft);font-weight:600}
-  .hint b{color:var(--teal)}
-  aside.panel{display:flex;flex-direction:column;gap:16px}
-  .group-title{font-family:var(--font-h);font-size:14px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.6px;margin:0 0 10px}
+  .pick-prompt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;color:var(--ink-soft);font-weight:700;pointer-events:none}
+  .pick-prompt .big{font-family:var(--font-h);font-size:20px;color:var(--ink)}
+  .pick-prompt .small{font-size:12.5px}
+  /* 底部横向面板 */
+  aside.panel{display:flex;flex-direction:row;gap:14px;flex-wrap:wrap;align-items:stretch}
+  aside.panel > .card{flex:0 0 auto;margin:0}
+  aside.panel > .card.grow{flex:1 1 300px;min-width:240px}
+  .group-title{font-family:var(--font-h);font-size:13px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.6px;margin:0 0 9px}
   .opt-row{display:flex;gap:8px;flex-wrap:wrap}
-  .opt{flex:1;min-width:84px;font-family:var(--font-h);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;gap:7px;padding:10px 8px;border:var(--b);border-radius:11px;background:var(--surface);cursor:pointer;box-shadow:var(--sh-sm);transition:transform .08s,box-shadow .08s,background .12s;user-select:none}
+  .opt{font-family:var(--font-h);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;border:var(--b);border-radius:11px;background:var(--surface);cursor:pointer;box-shadow:var(--sh-sm);transition:transform .08s,box-shadow .08s,background .12s;user-select:none}
   .opt:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
   .opt:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
   .opt.on{background:var(--ink);color:#fff}
   .opt.on svg{stroke:#fff}
   .opt svg{width:16px;height:16px;stroke:var(--ink);flex:none}
-  .brand-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .brand-row .opt{min-width:0;font-size:12.5px;padding:9px 4px}
-  .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .stat-row{display:flex;gap:18px}
   .stat{text-align:center}
-  .stat .n{font-family:var(--font-h);font-size:30px;font-weight:700;color:var(--orange);line-height:1}
-  .stat .l{font-size:12px;font-weight:700;color:var(--ink-soft);margin-top:4px}
-  .legend{max-height:300px;overflow:auto;padding-right:4px}
-  .bead-row{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:2px dashed var(--bg-2)}
-  .bead-row:last-child{border-bottom:0}
-  .bead-swatch{width:24px;height:24px;border-radius:5px;border:2.5px solid var(--ink);flex:none;box-shadow:1.5px 1.5px 0 var(--ink)}
-  .bead-code{font-family:var(--font-h);font-weight:700;font-size:15px;min-width:46px}
-  .bead-hex{font-size:10.5px;color:var(--ink-soft);font-weight:700;letter-spacing:.3px}
-  .bead-count{margin-left:auto;font-family:var(--font-h);font-weight:700;font-size:15px;background:var(--bg-2);border:2px solid var(--ink);border-radius:8px;padding:2px 9px;min-width:42px;text-align:center}
-  .btn{font-family:var(--font-h);font-weight:600;font-size:15px;display:inline-flex;align-items:center;gap:8px;background:var(--orange);color:#fff;border:var(--b);border-radius:12px;padding:11px 18px;cursor:pointer;box-shadow:var(--sh-sm);transition:transform .08s,box-shadow .08s,background .12s}
+  .stat .n{font-family:var(--font-h);font-size:26px;font-weight:700;color:var(--orange);line-height:1}
+  .stat .l{font-size:11px;font-weight:700;color:var(--ink-soft);margin-top:3px}
+  .legend{display:flex;flex-wrap:wrap;gap:7px;max-height:140px;overflow:auto;padding-right:4px}
+  .bead-row{display:inline-flex;align-items:center;gap:7px;padding:5px 9px;border:2px solid var(--ink);border-radius:9px;background:var(--surface);box-shadow:2px 2px 0 var(--ink)}
+  .bead-swatch{width:20px;height:20px;border-radius:5px;border:2px solid var(--ink);flex:none}
+  .bead-code{font-family:var(--font-h);font-weight:700;font-size:14px}
+  .bead-count{font-family:var(--font-h);font-weight:700;font-size:13px;color:var(--ink-soft)}
+  .btn{font-family:var(--font-h);font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:7px;background:var(--orange);color:#fff;border:var(--b);border-radius:11px;padding:9px 15px;cursor:pointer;box-shadow:var(--sh-sm);transition:transform .08s,box-shadow .08s,background .12s}
   .btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
   .btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
   .btn.ghost{background:var(--surface);color:var(--ink)}
-  .btn svg{width:17px;height:17px;stroke:currentColor}
+  .btn svg{width:16px;height:16px;stroke:currentColor}
   .actions{display:flex;gap:10px;flex-wrap:wrap}
   .orig-pop{position:fixed;inset:0;background:rgba(35,32,46,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
   .orig-pop.show{display:flex}
   .orig-pop img{max-width:min(420px,90vw);max-height:80vh;border:var(--b);border-radius:14px;box-shadow:var(--sh)}
   .orig-pop .close{position:absolute;top:18px;right:22px}
-  .footnote{margin-top:18px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.6}
+  .footnote{margin-top:8px;font-size:11.5px;color:var(--ink-soft);font-weight:600;line-height:1.6}
   .footnote code{background:var(--bg-2);padding:1px 6px;border-radius:5px;border:1.5px solid var(--ink)}
   @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
   .busy{height:4px;width:0;background:var(--orange);border-radius:4px;transition:width .2s}
@@ -114,7 +111,7 @@
     </div>
     <div class="title-wrap"><h1>拼豆智能助手</h1><div class="sub">图纸生成器 · 原型</div></div>
     <div class="spacer"></div>
-    <span class="badge">主导色提取 · 291 色</span>
+    <span class="badge">主导色提取 · MARD</span>
   </header>
 
   <div class="layout">
@@ -136,23 +133,22 @@
           <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
           <div class="prog-next">下一步 <span class="prog-chip" id="progChip">—</span></div>
           <label class="guide"><input type="checkbox" id="guideChk" checked>引导顺序</label>
-          <button class="btn ghost" id="btnReset" style="padding:8px 14px;font-size:14px">重置</button>
+          <button class="btn ghost" id="btnReset" style="padding:7px 12px;font-size:13px">重置</button>
         </div>
 
-        <span class="tool-label view-only">网格尺寸</span>
+        <span class="tool-label view-only">尺寸</span>
         <div class="seg view-only" id="sizeSeg">
           <button data-size="29">29</button>
           <button data-size="50" class="active">50</button>
           <button data-size="80">80</button>
           <button data-size="100">100</button>
         </div>
-        <span class="tool-label view-only" style="margin-left:8px">豆子大小</span>
-        <input type="range" id="beadZoom" min="6" max="26" value="14" class="view-only" />
-        <input type="range" id="beadZoomT" min="10" max="30" value="17" class="track-only" title="豆子大小" />
+        <span class="tool-label">缩放</span>
+        <input type="range" id="zoom" min="0.5" max="2.6" step="0.1" value="1" />
         <div class="spacer"></div>
         <div class="actions view-only">
           <button class="btn ghost" id="btnOrig"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>原图</button>
-          <button class="btn" id="btnExport"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>导出图纸 PNG</button>
+          <button class="btn" id="btnExport"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>导出 PNG</button>
         </div>
       </div>
 
@@ -161,34 +157,29 @@
         <div class="pick-prompt" id="pickPrompt"><div class="big">选择一张图片开始</div><div class="small">点击左上「选择图片」· 任意照片或已有拼豆图纸均可</div></div>
         <canvas id="cv"></canvas>
       </div>
-      <div class="hint view-only">每豆带<b>真实色号</b>（当前品牌）· 主导色提取（非均值）· 291 色最近欧氏映射 · <b>每 10 格分区</b>（列 A/B/C × 行 1/2/3）辅助定位</div>
-      <div class="hint track-only"><b>点击豆子标记已拼</b>（再点取消）· 橙色高亮 = 推荐的下一颗 · "下一步"含<b>分区坐标</b>（如 C3 · A01）帮你快速定位</div>
+      <div class="footnote">MVP 参考原型 · 主导色像素化 + 291 色最近欧氏映射 + 每豆 MARD 真实色号 + 每 10 格分区。数据来自 <code>../data/colorSystemMapping.json</code>。</div>
     </section>
 
     <aside class="panel">
       <div class="card pad view-only">
-        <h3 class="group-title">显示选项</h3>
+        <h3 class="group-title">显示</h3>
         <div class="opt-row">
           <button class="opt on" id="optZones"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>分区</button>
-          <button class="opt on" id="optCodes"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>色号标注</button>
+          <button class="opt on" id="optCodes"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>色号</button>
         </div>
       </div>
       <div class="card pad">
         <h3 class="group-title">统计</h3>
         <div class="stat-row">
           <div class="stat"><div class="n" id="statBeads">0</div><div class="l">总豆数</div></div>
-          <div class="stat"><div class="n" id="statColors">0</div><div class="l">使用颜色</div></div>
+          <div class="stat"><div class="n" id="statColors">0</div><div class="l">颜色</div></div>
         </div>
       </div>
-      <div class="card pad">
-        <h3 class="group-title">采购清单 · 色号→数量</h3>
+      <div class="card pad grow">
+        <h3 class="group-title">色号 → 数量</h3>
         <div class="legend" id="legend"></div>
       </div>
     </aside>
-  </div>
-
-  <div class="footnote">
-    MVP 参考原型 · 对应 <code>technical-roadmap.md</code> 算法1（像素化·主导色）+ 算法2（色号映射·欧氏距离）。每颗豆标注当前品牌真实色号；每 10 格分区辅助定位。数据来自 <code>../data/colorSystemMapping.json</code>（内置到 <code>palette.js</code>）。
   </div>
 </div>
 
@@ -206,20 +197,25 @@
   const hexRgb=h=>{const n=parseInt(h.slice(1),16);return [(n>>16)&255,(n>>8)&255,n&255];};
   function nearestHex(r,g,b){let bi=0,bd=Infinity;for(let i=0;i<PAL_RGB.length;i++){const p=PAL_RGB[i],dr=p[0]-r,dg=p[1]-g,db=p[2]-b,d=dr*dr+dg*dg+db*db;if(d<bd){bd=d;bi=i;}}return PALETTE[bi];}
 
-  const ZONE=10;
+  const ZONE=10, brand='MARD';
   let srcData=null,srcW=0,srcH=0,rows=0,cols=0,hexGrid=[];
   let IMG_ASPECT=1, curImgURL=null;
   let sortedItems=[];
   let placed=[], routeOrder=[];
-  let size=50; const brand='MARD';
+  let size=50;
   let showZones=true, showCodes=true;
-  let beadPx=14, beadPxTrack=17;
+  let zoom=1;
   let mode='view', guide=true;
 
-  const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  const cv=document.getElementById('cv'), ctx=cv.getContext('2d'), scroll=document.getElementById('scroll');
   const dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
 
-  function geom(){const bp=(mode==='track')?beadPxTrack:beadPx;const M=showZones?Math.round(bp*1.7):0;return {bp,M};}
+  function fitBp(){
+    const W=Math.max(120,scroll.clientWidth-28), H=Math.max(120,scroll.clientHeight-28);
+    const zM=showZones?3.4:0;
+    return Math.max(6, Math.min(48, Math.floor(Math.min(W/(cols+zM), H/(rows+zM))*zoom)));
+  }
+  function geom(){const bp=fitBp();const M=showZones?Math.round(bp*1.7):0;return {bp,M};}
   function zoneLabel(r,c){return String.fromCharCode(65+Math.floor(c/ZONE)%26)+(Math.floor(r/ZONE)+1);}
 
   function pixelize(){
@@ -306,7 +302,7 @@
     document.getElementById('legend').innerHTML=sortedItems.map(([hex,n])=>{
       const code=BRAND_CODES[brand][hex];
       const bg=`radial-gradient(circle at 35% 30%, rgba(255,255,255,.55), rgba(255,255,255,0) 55%), ${hex}`;
-      return `<div class="bead-row"><span class="bead-swatch" style="background:${bg}"></span><span class="bead-code">${code}</span><span class="bead-hex">${hex}</span><span class="bead-count">×${n}</span></div>`;
+      return `<div class="bead-row"><span class="bead-swatch" style="background:${bg}"></span><span class="bead-code">${code}</span><span class="bead-count">×${n}</span></div>`;
     }).join('');
   }
   function updateProgress(){
@@ -335,7 +331,7 @@
       g.fillText('拼豆图纸 · '+brand+' · '+cols+'×'+rows+' · '+sortedItems.length+' 色 · '+(rows*cols)+' 颗', 20, 32);
       g.save(); g.translate(Math.floor((W-gridW)/2), titleH+6); drawGrid(g,bp,true,true); g.restore();
       let ly=titleH+gridH+30;
-      g.fillStyle='#23202E'; g.font='700 16px Fredoka,sans-serif'; g.fillText('采购清单（色号 → HEX → 数量）', 20, ly); ly+=12;
+      g.fillStyle='#23202E'; g.font='700 16px Fredoka,sans-serif'; g.fillText('色号 → HEX → 数量', 20, ly); ly+=12;
       sortedItems.forEach(([hex,n],i)=>{
         const col=i%legendCols, row=Math.floor(i/legendCols), x=20+col*itemW, y=ly+row*itemH;
         const code=BRAND_CODES[brand][hex];
@@ -378,12 +374,12 @@
     placed[r][c]=!placed[r][c]; render(); updateProgress();
   });
   document.getElementById('sizeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;size=+b.dataset.size;[...e.currentTarget.children].forEach(x=>x.classList.toggle('active',x===b));regen();});
-  document.getElementById('beadZoom').addEventListener('input',e=>{beadPx=+e.target.value;if(mode==='view')render();});
-  document.getElementById('beadZoomT').addEventListener('input',e=>{beadPxTrack=+e.target.value;render();});
+  document.getElementById('zoom').addEventListener('input',e=>{zoom=+e.target.value;render();});
   document.getElementById('guideChk').addEventListener('change',e=>{guide=e.target.checked;render();});
   document.getElementById('btnReset').addEventListener('click',()=>{for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)placed[r][c]=false;render();updateProgress();});
   document.getElementById('optZones').addEventListener('click',function(){showZones=!showZones;this.classList.toggle('on',showZones);render();});
   document.getElementById('optCodes').addEventListener('click',function(){showCodes=!showCodes;this.classList.toggle('on',showCodes);render();});
+  let rT; window.addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(()=>{if(srcData)render();},120);});
   const pop=document.getElementById('origPop');
   document.getElementById('btnOrig').addEventListener('click',()=>{if(curImgURL)pop.classList.add('show');});
   document.getElementById('origClose').addEventListener('click',()=>pop.classList.remove('show'));
