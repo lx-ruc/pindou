@@ -8,7 +8,7 @@
 
 ## What Changes
 
-- 初始化 monorepo（pnpm workspaces）：`packages/app`（Taro 4 多端）、`packages/core`（纯 TS 算法，无 DOM/小程序 API）、`packages/server`（Hono 骨架）、`packages/shared`
+- 初始化 **uni-app + Vue 3 + TS 单工程**（编译微信小程序 + H5）；算法在 `src/utils/`（纯函数），状态用 Pinia（shallowRef 避免大数组 reactive）
 - 加载 5 品牌 × 291 色数据；MVP 以 MARD 为唯一展示品牌（数据层含全 5 品牌，切换 UI 留后续）
 - 图纸生成：主导色提取（非均值）像素化 + 291 色最近欧氏映射；两个入口（拍照/任意图片、上传已有图纸）
 - 图纸标注：每豆直接印 MARD 真实色号 + 采购清单；每 10 格分区（边缘坐标）辅助定位；导出按 29×29 板分页 PNG
@@ -30,8 +30,9 @@
 
 ## Impact
 
-- **新增仓库内容**: `packages/*` 四包骨架；`data/colorSystemMapping.json` 已就位（待补 RGB/LAB/中文名/色系/子集）
-- **客户端优先**: 图纸生成与进度追踪 100% 客户端完成，无服务端依赖（`packages/server` 仅留骨架）
+- **新增仓库内容**: uni-app 工程 `src/`（utils / stores / composables / components / pages）；`data/colorSystemMapping.json` 已就位（待补 RGB/LAB/中文名/色系/子集）
+- **客户端优先**: 图纸生成与进度追踪 100% 客户端完成，暂无后端
+- **架构调整**: 由原计划的 Taro + React + pnpm monorepo 改为 **uni-app + Vue 3 单工程**（对齐既有 dream 项目；见 design 决策 0）
 - **数据模型**: 新增 `Board.peg_inset`；`Project` 加 `source_type` + 多板状态 + `route_state` + 编辑覆盖层
 - **可视化原型**: `/Users/lixin/Desktop/pindou-demo/`（图纸生成 + 导出 + 手动进度的可运行参考实现，已确立像素 + neobrutalism + Fredoka 视觉语言与豆子质感）
 - **后续变更**: 「拍照识别进度」(P2) 为下一个独立变更，需先完成方案 Z spike（见 design.md 决策 8）

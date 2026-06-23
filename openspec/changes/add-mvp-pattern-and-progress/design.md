@@ -1,5 +1,12 @@
 ## 关键设计决策
 
+### 决策 0：技术栈 = uni-app + Vue 3（单工程，非 monorepo）
+原计划 Taro + React + pnpm monorepo；实际落地为 **uni-app + Vue 3 + Pinia 单工程**（对齐既有 dream 项目）。
+- 算法在 `src/utils/`（palette / color / pixelize / route），纯函数、无 uni API → 可直接单测。
+- 最近色用 **32³ LUT 预计算**（~4ms）实现 O(1) 查表，替代每次遍历 291 色。
+- 状态在 Pinia `usePatternStore`，大数组（hexGrid / placed）用 `shallowRef` + `triggerRef`，避免 Vue 对 typed array 做 deep reactive 卡死。
+- 平台胶水（Canvas、chooseImage、getImageData）隔离在 `composables/`（useImageDecode / useCanvas2d）。跨端由 uni-app 编译保证（MP + H5）。
+
 ### 决策 1：色号网格是通用枢纽
 两个图纸入口（拍照生成 / 上传已有图纸）都产出同一个 rows×cols 色号网格；下游（推荐顺序、进度、未来的拍照识别）只消费网格、不关心来源。网格是一等公民数据结构，`Project` 持久化的就是网格 + 元数据（`source_type` 仅记录来源）。切换品牌时网格的 HEX 不变、只重映射色号——这是"实时重映射 < 500ms"可行的原因。
 
@@ -34,7 +41,7 @@
 
 ## 平台顺序
 
-图纸生成 + 进度追踪无 CV、无 spike 阻塞 → 直接 H5 快速迭代 → Taro 编译微信小程序。仅拍照识别（P2）需先在真机跑 spike。
+图纸生成 + 进度追踪无 CV、无 spike 阻塞 → uni-app 编译 H5（快速迭代）+ 微信小程序。仅拍照识别（P2）需先在真机跑 spike。
 
 ## 视觉语言（由 Desktop 原型确立）
 
