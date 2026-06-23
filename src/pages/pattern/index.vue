@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, getCurrentInstance, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, getCurrentInstance, onMounted, nextTick } from 'vue'
 import { usePatternStore } from '@/stores/pattern'
 import { drawGrid, drawProgressOverlay, drawComposed } from '@/utils/canvasDraw'
 import { saveImageToAlbum } from '@/utils/permissions'
@@ -17,6 +17,15 @@ const showOrig = ref(false)
 const exporting = ref(false)
 // canvas 导出的 PNG 路径，给 <image> 显示（绕过 mp-weixin canvas 显示层 bug）
 const patternImageSrc = ref('')
+// image 元素 ref，tap 时拿 boundingClientRect（e.currentTarget 在 uni-app H5 下可能指向 canvas）
+const imageRef = ref<any>(null)
+
+// canvas-scroll 的 aspect-ratio = grid 比例（cols:rows），同时设 CSS 变量给 max-width 用
+const canvasScrollStyle = computed(() => {
+  if (!store.srcData || store.cols === 0 || store.rows === 0) return ''
+  const ratio = store.cols / store.rows
+  return `aspect-ratio: ${store.cols} / ${store.rows}; --grid-ratio: ${ratio}`
+})
 
 // 用 canvas 自己的 CSS 尺寸算 bp（不是父容器 scroll-view 的尺寸）
 function fitBp(canvasCssW: number, canvasCssH: number): number {
@@ -38,17 +47,16 @@ let canvasDpr = 1
 let canvasCssW = 0
 let canvasCssH = 0
 
+// 拿 canvas node + dpr（canvas-scroll 尺寸每次 render 动态拿，因为 aspect-ratio 会变）
 function fetchCanvasNode(): Promise<void> {
   return new Promise((resolve) => {
     uni.createSelectorQuery()
       .in(instance)
       .select('#' + canvasId)
-      .fields({ node: true, size: true } as any, (res: any) => {
+      .fields({ node: true } as any, (res: any) => {
         if (res && res.node) {
           canvasNode = res.node
           canvasDpr = uni.getSystemInfoSync().pixelRatio
-          canvasCssW = res.width
-          canvasCssH = res.height
         }
         resolve()
       })
@@ -100,22 +108,52 @@ function render(): void {
   if (!store.srcData || store.rows === 0 || store.cols === 0) return
   if (!canvasNode) return
 
+  // 拿 image 的 boundingClientRect（= canvas buffer 应该的尺寸，和外框边缘对齐）
+  // 第一次 render 时 image 可能还没显示（patternImageSrc 空），fallback 到 canvas-scroll 内容区
+  uni.createSelectorQuery()
+    .in(instance)
+    .select('.pattern-image')
+    .boundingClientRect((imgRect: any) => {
+      if (imgRect && imgRect.width > 0 && imgRect.height > 0) {
+        drawPattern(imgRect.width, imgRect.height)
+        return
+      }
+      // image 没显示，用 canvas-scroll 内容区（减 border）
+      uni.createSelectorQuery()
+        .in(instance)
+        .select('.canvas-scroll')
+        .boundingClientRect((scrollRect: any) => {
+          if (!scrollRect) return
+          // scrollRect 是外框尺寸（含 border 3px），内容区 = 外框 - 2*border
+          drawPattern(scrollRect.width - 6, scrollRect.height - 6)
+        })
+        .exec()
+    })
+    .exec()
+}
+
+function drawPattern(cw: number, ch: number): void {
+  if (!canvasNode || !store.srcData) return
   const canvas = canvasNode
   const dpr = canvasDpr
 
-  // canvas 离屏画 grid，然后 toTempFilePath 导出 PNG 给 <image> 显示
-  // （mp-weixin devtools 下 canvas 直接显示不稳定，导出 PNG + image 渲染可靠）
-  const bp = fitBp(canvasCssW, canvasCssH)
+  // grid 尺寸（可能小于 buffer，居中绘制）
+  const bp = fitBp(cw, ch)
   const M = store.showZones ? Math.round(bp * 1.7) : 0
   const W = store.cols * bp + 2 * M
   const H = store.rows * bp + 2 * M
 
-  canvas.width = Math.floor(W * dpr)
-  canvas.height = Math.floor(H * dpr)
+  canvas.width = Math.floor(cw * dpr)
+  canvas.height = Math.floor(ch * dpr)
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.scale(dpr, dpr)
-  ctx.clearRect(0, 0, W, H)
+  ctx.clearRect(0, 0, cw, ch)
+
+  // 居中画 grid
+  const ox = Math.floor((cw - W) / 2)
+  const oy = Math.floor((ch - H) / 2)
+  ctx.translate(Math.max(0, ox), Math.max(0, oy))
 
   drawGrid(ctx, store.hexGrid, store.rows, store.cols, bp, store.showCodes, store.showZones, store.brand)
 
@@ -133,16 +171,25 @@ function render(): void {
     )
   }
 
-  // 导出 PNG 给 <image> 显示
-  canvas.toTempFilePath({
-    x: 0, y: 0, width: W, height: H,
-    destWidth: Math.floor(W * dpr), destHeight: Math.floor(H * dpr),
-    fileType: 'png',
-    success: (r: any) => { patternImageSrc.value = r.tempFilePath },
-    fail: (e: any) => { console.error('[render] toTempFilePath failed', e) },
-  })
+  // 导出 PNG 给 <image> 显示（绕过 mp-weixin canvas 显示层 bug）
+  // canvas buffer 尺寸 = cw × ch，导出整个 buffer
+  if (typeof canvas.toTempFilePath === 'function') {
+    canvas.toTempFilePath({
+      x: 0, y: 0, width: cw, height: ch,
+      destWidth: Math.floor(cw * dpr), destHeight: Math.floor(ch * dpr),
+      fileType: 'png',
+      success: (r: any) => { patternImageSrc.value = r.tempFilePath },
+      fail: (e: any) => { console.error('[render] toTempFilePath failed', e) },
+    })
+  } else {
+    try {
+      patternImageSrc.value = canvas.toDataURL('image/png')
+    } catch (e) {
+      console.error('[render] toDataURL failed', e)
+    }
+  }
 
-  dumpCanvasStats(canvas, ctx, W, H)
+  dumpCanvasStats(canvas, ctx, cw, ch)
 }
 
 function onPicked(): void {
@@ -151,17 +198,29 @@ function onPicked(): void {
 
 function onCanvasTap(e: any): void {
   if (store.mode !== 'track' || !store.srcData) return
-  const x = e.detail?.x ?? e.touches?.[0]?.x ?? e.changedTouches?.[0]?.x
-  const y = e.detail?.y ?? e.touches?.[0]?.y ?? e.changedTouches?.[0]?.y
-  if (x == null || y == null) return
-  const bp = fitBp(canvasCssW, canvasCssH)
+  const rawX = e.detail?.x ?? e.clientX ?? e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX
+  const rawY = e.detail?.y ?? e.clientY ?? e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY
+  if (rawX == null || rawY == null) return
+
+  // 用 imageRef 拿 image 元素的 boundingClientRect
+  // （e.currentTarget 在 uni-app H5 下可能指向 canvas 而非 image）
+  const imgEl = imageRef.value?.$el || imageRef.value
+  const rect = imgEl?.getBoundingClientRect
+    ? imgEl.getBoundingClientRect()
+    : { left: 0, top: 0, width: canvasCssW, height: canvasCssH }
+
+  const x = rawX - rect.left
+  const y = rawY - rect.top
+
+  const bp = fitBp(rect.width, rect.height)
   const M = store.showZones ? Math.round(bp * 1.7) : 0
   const W = store.cols * bp + 2 * M
   const H = store.rows * bp + 2 * M
-  const ox = Math.floor((canvasCssW - W) / 2)
-  const oy = Math.floor((canvasCssH - H) / 2)
+  const ox = Math.floor((rect.width - W) / 2)
+  const oy = Math.floor((rect.height - H) / 2)
   const c = Math.floor((x - ox - M) / bp)
   const r = Math.floor((y - oy - M) / bp)
+  console.log('[onCanvasTap] raw=(' + rawX + ',' + rawY + ') rect=' + rect.width + 'x' + rect.height + ' cell r=' + r + ' c=' + c)
   if (r < 0 || r >= store.rows || c < 0 || c >= store.cols) return
   store.togglePlaced(r, c)
   nextTick(() => render())
@@ -204,16 +263,30 @@ async function onExport(): Promise<void> {
     ctx.clearRect(0, 0, W, H)
     drawComposed(ctx, store.hexGrid, store.rows, store.cols, store.sortedItems, store.brand, bp)
 
-    const tempFilePath: string = await new Promise((resolve, reject) => {
-      canvas.toTempFilePath({
-        x: 0, y: 0, width: W, height: H,
-        destWidth: Math.floor(W * dpr), destHeight: Math.floor(H * dpr),
-        fileType: 'png',
-        success: (r: any) => resolve(r.tempFilePath),
-        fail: (e: any) => reject(e),
+    // H5 vs mp-weixin：mp 用 canvas.toTempFilePath + saveImageToPhotosAlbum；
+    // H5 用 canvas.toDataURL + <a download> 触发浏览器下载
+    if (typeof canvas.toTempFilePath === 'function') {
+      const tempFilePath: string = await new Promise((resolve, reject) => {
+        canvas.toTempFilePath({
+          x: 0, y: 0, width: W, height: H,
+          destWidth: Math.floor(W * dpr), destHeight: Math.floor(H * dpr),
+          fileType: 'png',
+          success: (r: any) => resolve(r.tempFilePath),
+          fail: (e: any) => reject(e),
+        })
       })
-    })
-    await saveImageToAlbum(tempFilePath)
+      await saveImageToAlbum(tempFilePath)
+    } else {
+      // H5：toDataURL + <a download>
+      const dataUrl = canvas.toDataURL('image/png')
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `pindou-pattern-${store.cols}x${store.rows}-${store.brand}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      uni.showToast({ title: '已下载', icon: 'success' })
+    }
   } catch (e) {
     console.error('export failed', e)
     uni.showToast({ title: '导出失败', icon: 'none' })
@@ -229,6 +302,18 @@ onMounted(() => {
       fetchCanvasNode().then(() => render())
     }, 50)
   })
+})
+
+// watch UI 状态变化触发 render（primitive sources，不 deep walk typed array）
+watch(() => store.mode, () => nextTick(() => render()))
+watch(() => store.size, () => nextTick(() => render()))
+watch(() => store.zoom, () => nextTick(() => render()))
+watch(() => store.showZones, () => nextTick(() => render()))
+watch(() => store.showCodes, () => nextTick(() => render()))
+watch(() => store.guide, () => nextTick(() => render()))
+// placed 用 shallowRef + triggerRef，watch 引用变化（triggerRef 触发）
+watch(() => store.placed, () => {
+  if (store.mode === 'track') nextTick(() => render())
 })
 </script>
 
@@ -253,9 +338,10 @@ onMounted(() => {
       <Toolbar @picked="onPicked" @viewOrig="showOrig = true" @export="onExport" />
       <ProgressStrip />
 
-      <view class="canvas-scroll">
+      <view class="canvas-scroll" :style="canvasScrollStyle">
         <image
           v-if="patternImageSrc"
+          ref="imageRef"
           :src="patternImageSrc"
           mode="aspectFit"
           class="pattern-image"
@@ -351,13 +437,17 @@ onMounted(() => {
     $bg-2;
   border: $border;
   border-radius: 12px;
-  height: 500rpx;
-  padding: 12px;
+  /* 限制最大尺寸不超出 viewport；inline style 设 aspect-ratio 让比例匹配 grid */
+  width: 100%;
+  max-width: min(100%, calc(75vh * var(--grid-ratio, 1)));
+  max-height: 75vh;
+  margin: 0 auto;
+  min-height: 300rpx;
   position: relative;
   box-sizing: border-box;
+  overflow: hidden;
 }
 .pattern-canvas {
-  /* canvas 只用于离屏画图，导出 PNG 给 .pattern-image 显示 */
   position: fixed;
   left: -9999px;
   top: 0;
@@ -366,11 +456,11 @@ onMounted(() => {
   pointer-events: none;
 }
 .pattern-image {
+  display: block;
   width: 100%;
   height: 100%;
-  background: $bg-2;
-  border: $border;
-  border-radius: 6px;
+  /* 强制拉伸到容器尺寸，不用 natural size（否则会撑开 canvas-scroll 破坏 aspect-ratio） */
+  object-fit: fill;
   box-sizing: border-box;
 }
 .pick-prompt {
