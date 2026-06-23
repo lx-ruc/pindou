@@ -1,0 +1,18 @@
+{
+  "pages": [
+    {
+      "path": "pages/pattern/index",
+      "style": {
+        "navigationBarTitleText": "拼豆智能助手",
+        "navigationBarBackgroundColor": "#FBF6EC",
+        "navigationBarTextStyle": "black"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#FBF6EC",
+    "backgroundColor": "#FBF6EC",
+    "backgroundTextStyle": "dark"
+  }
+}

@@ -35,3 +35,7 @@ Thumbs.db
 .cache/
 coverage/
 *.local
+
+# Debug scripts (临时调试用，不进版本库)
+test-mp-*.js
+test-mock-check.js
