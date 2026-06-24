@@ -174,9 +174,16 @@ function drawPattern(cw: number, ch: number): void {
   // 导出 PNG 给 <image> 显示（绕过 mp-weixin canvas 显示层 bug）
   // canvas buffer 尺寸 = cw × ch，导出整个 buffer
   if (typeof canvas.toTempFilePath === 'function') {
+    // 源区域必须是整个 buffer（canvas.width/height = cw*dpr）。
+    // 若传 CSS 尺寸 cw/ch，WeChat 会按 buffer 像素解释 → 只截左上 1/dpr，
+    // <image> 显示出来就是被裁的一角。
     canvas.toTempFilePath({
-      x: 0, y: 0, width: cw, height: ch,
-      destWidth: Math.floor(cw * dpr), destHeight: Math.floor(ch * dpr),
+      x: 0,
+      y: 0,
+      width: canvas.width,
+      height: canvas.height,
+      destWidth: canvas.width,
+      destHeight: canvas.height,
       fileType: 'png',
       success: (r: any) => { patternImageSrc.value = r.tempFilePath },
       fail: (e: any) => { console.error('[render] toTempFilePath failed', e) },
@@ -268,8 +275,12 @@ async function onExport(): Promise<void> {
     if (typeof canvas.toTempFilePath === 'function') {
       const tempFilePath: string = await new Promise((resolve, reject) => {
         canvas.toTempFilePath({
-          x: 0, y: 0, width: W, height: H,
-          destWidth: Math.floor(W * dpr), destHeight: Math.floor(H * dpr),
+          x: 0,
+          y: 0,
+          width: canvas.width,
+          height: canvas.height,
+          destWidth: canvas.width,
+          destHeight: canvas.height,
           fileType: 'png',
           success: (r: any) => resolve(r.tempFilePath),
           fail: (e: any) => reject(e),
