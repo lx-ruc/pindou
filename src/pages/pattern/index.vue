@@ -413,11 +413,12 @@ watch(() => store.placed, () => {
 
 <style lang="scss" scoped>
 .page {
-  min-height: 100vh;
-  padding: 14px clamp(12px, 3vw, 32px) 24px;
+  height: 100vh;
+  padding: 12px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .header {
   display: flex;
@@ -570,5 +571,16 @@ watch(() => store.placed, () => {
   width: 10px;
   height: 10px;
   pointer-events: none;
+}
+</style>
+
+<style>
+/* 全局：禁止页面滚动，画布刚好占满一屏 */
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
 }
 </style>

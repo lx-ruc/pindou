@@ -3,7 +3,7 @@
     {
       "path": "pages/pattern/index",
       "style": {
-        "navigationBarTitleText": "拼豆智能助手",
+        "navigationStyle": "custom",
         "navigationBarBackgroundColor": "#FBF6EC",
         "navigationBarTextStyle": "black"
       }
