@@ -367,7 +367,6 @@ watch(() => store.placed, () => {
       </view>
       <view class="title-wrap">
         <text class="title">拼豆智能助手</text>
-        <text class="sub">图纸生成器 · 小程序版</text>
       </view>
       <view class="spacer" />
       <view class="badge">主导色提取 · MARD</view>
