@@ -501,7 +501,7 @@ watch(() => store.placed, () => {
   .sidebar :deep(.seg),
   .sidebar :deep(.actions),
   .sidebar :deep(.btn),
-  .sidebar :deep(.zoom-slider) { width: 100%; }
+  .sidebar :deep(.zoom-slider) { width: 100%; box-sizing: border-box; }
   .sidebar :deep(.actions) { flex-direction: column; align-items: stretch; }
   .sidebar :deep(.btn) { justify-content: center; }
 }
