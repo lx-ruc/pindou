@@ -168,6 +168,9 @@ function drawPattern(cw: number, ch: number): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.scale(dpr, dpr)
   ctx.clearRect(0, 0, cw, ch)
+  // 米黄底占满整块画布，消除两侧留白；像素图居中画在其上
+  ctx.fillStyle = '#ECE4D2'
+  ctx.fillRect(0, 0, cw, ch)
 
   // 居中画 grid
   const ox = Math.floor((cw - W) / 2)
