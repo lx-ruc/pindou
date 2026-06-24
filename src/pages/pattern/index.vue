@@ -478,6 +478,7 @@ watch(() => store.placed, () => {
   padding: 12px;
   display: flex;
   flex-direction: column;
+  background: $canvas-bg;
 }
 .layout {
   display: flex;
