@@ -495,7 +495,12 @@ watch(() => store.placed, () => {
   .layout { flex-direction: row; }
   .canvas-card { flex: 1 1 auto; min-width: 0; }
   .sidebar { flex: 0 0 300px; width: 300px; }
-  .sidebar :deep(.toolbar) { flex-direction: column; align-items: stretch; padding: 0; }
+  .sidebar :deep(.toolbar) { flex-direction: column; align-items: stretch; padding: 0; gap: 12px; }
+  .sidebar :deep(.tool-label) { margin-bottom: -6px; }
+  .sidebar :deep(.mode-toggle),
+  .sidebar :deep(.seg),
+  .sidebar :deep(.actions),
+  .sidebar :deep(.btn),
   .sidebar :deep(.zoom-slider) { width: 100%; }
   .sidebar :deep(.actions) { flex-direction: column; align-items: stretch; }
   .sidebar :deep(.btn) { justify-content: center; }
