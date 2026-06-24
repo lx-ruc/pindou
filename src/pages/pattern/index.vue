@@ -461,10 +461,8 @@ watch(() => store.placed, () => {
     $bg-2;
   border: $border;
   border-radius: 12px;
-  /* 限制最大尺寸不超出 viewport；inline style 设 aspect-ratio 让比例匹配 grid */
+  /* 占满卡片宽度；inline style 设 aspect-ratio 让比例匹配 grid */
   width: 100%;
-  max-width: min(100%, calc(75vh * var(--grid-ratio, 1)));
-  max-height: 75vh;
   margin: 0 auto;
   min-height: 300rpx;
   position: relative;
