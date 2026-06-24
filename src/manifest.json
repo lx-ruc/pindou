@@ -15,5 +15,10 @@
       "minified": true
     },
     "usingComponents": true
+  },
+  "h5": {
+    "router": {
+      "mode": "hash"
+    }
   }
 }
