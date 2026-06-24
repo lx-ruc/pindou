@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePatternStore } from '@/stores/pattern'
 
-const emit = defineEmits<{ (e: 'viewOrig'): void; (e: 'export'): void }>()
+const emit = defineEmits<{ (e: 'viewOrig'): void; (e: 'export'): void; (e: 'pick'): void }>()
 
 const store = usePatternStore()
 
@@ -55,6 +55,10 @@ const SIZES = [29, 50, 80, 100]
         <text>导出 PNG</text>
       </view>
     </view>
+
+    <view class="btn pick" @tap="emit('pick')">
+      <text>{{ store.srcData ? '换图片' : '选择图片' }}</text>
+    </view>
   </view>
 </template>
 
@@ -78,6 +82,7 @@ const SIZES = [29, 50, 80, 100]
   font-weight: 600;
   font-size: 14px;
   box-shadow: $shadow-sm;
+  &.pick { background: $teal; }
   &.ghost { background: $surface; color: $ink; }
 }
 .mode-toggle, .seg {
@@ -88,6 +93,7 @@ const SIZES = [29, 50, 80, 100]
   background: $bg-2;
   box-shadow: $shadow-sm;
 }
+.mode-toggle, .seg { width: 100%; }
 .mode-btn, .seg-btn {
   font-weight: 600;
   font-size: 14px;
@@ -97,6 +103,7 @@ const SIZES = [29, 50, 80, 100]
   color: $ink;
   &:last-child { border-right: 0; }
 }
+.mode-btn, .seg-btn { flex: 1 1 0; text-align: center; justify-content: center; }
 .mode-btn.active { background: $orange; color: #fff; }
 .seg-btn.active { background: $ink; color: #fff; }
 .tool-label {

@@ -117,6 +117,11 @@ export const usePatternStore = defineStore('pattern', () => {
     mode.value = m
   }
 
+  function setBrand(b: Brand): void {
+    if (b === brand.value) return
+    brand.value = b
+  }
+
   function setSize(s: number): void {
     if (s === size.value) return
     size.value = s
@@ -166,6 +171,7 @@ export const usePatternStore = defineStore('pattern', () => {
     togglePlaced,
     resetPlaced,
     setMode,
+    setBrand,
     setSize,
     setZoom,
     toggleZones,

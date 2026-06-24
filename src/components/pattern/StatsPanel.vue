@@ -33,32 +33,14 @@ const store = usePatternStore()
       </view>
     </view>
 
-    <view class="card legend-card">
-      <view class="group-title">色号 → 数量</view>
-      <scroll-view scroll-y class="legend-scroll">
-        <view class="legend">
-          <view
-            v-for="[hex, n] in store.sortedItems"
-            :key="hex"
-            class="bead-row"
-          >
-            <view class="bead-swatch" :style="{ background: hex }" />
-            <text class="bead-code">{{ BRAND_CODES[store.brand][hex] }}</text>
-            <text class="bead-count">×{{ n }}</text>
-          </view>
-        </view>
-      </scroll-view>
-    </view>
   </view>
 </template>
 
 <style lang="scss" scoped>
 .panel {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   gap: 14px;
-  flex-wrap: wrap;
-  align-items: stretch;
 }
 .card {
   background: $surface;
@@ -66,9 +48,10 @@ const store = usePatternStore()
   border-radius: $radius;
   box-shadow: $shadow;
   padding: 14px;
-  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
-.display-card, .stats-card { min-width: 180rpx; }
+.display-card, .stats-card { min-width: 0; }
 .legend-card {
   flex: 1 1 300px;
   min-width: 240px;
@@ -80,11 +63,13 @@ const store = usePatternStore()
   text-transform: uppercase;
   letter-spacing: 0.6px;
   margin: 0 0 9px;
+  text-align: center;
 }
 .opt-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 .opt {
   font-weight: 600;
@@ -106,6 +91,7 @@ const store = usePatternStore()
 .stat-row {
   display: flex;
   gap: 18px;
+  justify-content: center;
 }
 .stat {
   text-align: center;

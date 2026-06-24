@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, getCurrentInstance, onMounted, nextTick } from 'vue'
 import { usePatternStore } from '@/stores/pattern'
+import { BRAND_CODES } from '@/utils/palette'
+import type { Brand } from '@/types/pattern'
+
+const BRANDS: Brand[] = ['MARD', 'COCO', '漫漫', '盼盼', '咪小窝']
 import { drawGrid, drawProgressOverlay, drawComposed } from '@/utils/canvasDraw'
 import { saveImageToAlbum } from '@/utils/permissions'
 import { pickAndDecodeImage } from '@/composables/useImageDecode'
@@ -23,23 +27,29 @@ const imageRef = ref<any>(null)
 
 // canvas-scroll 用 aspect-ratio 让宽高比 = grid 比例（cols:rows）；
 // max-height + 对应的 max-width 保证宽屏下 canvas-scroll 是正方形（grid 填满，无两侧留白）
-const canvasScrollStyle = computed(() => {
-  if (!store.srcData || store.cols === 0 || store.rows === 0) return ''
-  const ratio = store.cols / store.rows
-  return `aspect-ratio: ${store.cols} / ${store.rows}; max-height: 75vh; max-width: calc(75vh * ${ratio}); margin: 0 auto`
+// canvas-card 本身保持 grid 比例（接近正方形），canvas-scroll 占满 canvas-card
+// canvas-card 用 aspect-ratio + max-height 让它的高度 = layout 高度，width 按比例算
+// 没选图时默认 1:1 正方形（避免画布压扁）
+const canvasCardStyle = computed(() => {
+  if (!store.srcData || store.cols === 0 || store.rows === 0) {
+    return 'aspect-ratio: 1 / 1; max-height: 100%; margin: 0 auto'
+  }
+  return `aspect-ratio: ${store.cols} / ${store.rows}; max-height: 100%; margin: 0 auto`
 })
+const canvasScrollStyle = computed(() => '')
 
-// 用 canvas 自己的 CSS 尺寸算 bp（不是父容器 scroll-view 的尺寸）
-function fitBp(canvasCssW: number, canvasCssH: number): number {
+// 视图状态：pan 偏移（CSS px，相对 canvas 左上）+ zoom 倍数
+// zoom > 1 时 grid 比 canvas 大，超出的部分被 overflow:hidden 裁掉，用户拖动 pan 查看不同区域
+const panX = ref(0)
+const panY = ref(0)
+
+// cells 必须是正方形（拼豆实际就是方格）。bp = min(canvasW/cols, canvasH/rows) * zoom
+// canvas 比例和 grid 不一致时，grid 居中绘制，两侧露出 canvas-card 米色背景（无小框感）
+function fitBp(canvasCssW: number, canvasCssH: number): { bpX: number; bpY: number } {
   const zM = store.showZones ? 3.4 : 0
-  // bp 能小到 3（确保任何 canvas 都能放下 grid）
-  return Math.max(
-    3,
-    Math.min(
-      48,
-      Math.floor(Math.min(canvasCssW / (store.cols + zM), canvasCssH / (store.rows + zM)) * store.zoom)
-    )
-  )
+  const base = Math.min(canvasCssW / (store.cols + zM), canvasCssH / (store.rows + zM))
+  const bp = Math.max(3, base * store.zoom)
+  return { bpX: bp, bpY: bp }
 }
 
 // 缓存 canvas node：onMounted 时调一次 selectorQuery（在 setup scope 能成功）
@@ -158,11 +168,12 @@ function drawPattern(cw: number, ch: number): void {
   const canvas = canvasNode
   const dpr = canvasDpr
 
-  // grid 尺寸（可能小于 buffer，居中绘制）
-  const bp = fitBp(cw, ch)
-  const M = store.showZones ? Math.round(bp * 1.7) : 0
-  const W = store.cols * bp + 2 * M
-  const H = store.rows * bp + 2 * M
+  // grid 尺寸（拉伸填满 canvas，可能非正方形 cells）
+  const { bpX, bpY } = fitBp(cw, ch)
+  const Mx = store.showZones ? Math.round(bpX * 1.7) : 0
+  const My = store.showZones ? Math.round(bpY * 1.7) : 0
+  const W = store.cols * bpX + 2 * Mx
+  const H = store.rows * bpY + 2 * My
 
   canvas.width = Math.floor(cw * dpr)
   canvas.height = Math.floor(ch * dpr)
@@ -170,16 +181,16 @@ function drawPattern(cw: number, ch: number): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.scale(dpr, dpr)
   ctx.clearRect(0, 0, cw, ch)
-  // 米黄底占满整块画布，消除两侧留白；像素图居中画在其上
+  // 米黄底占满整块画布
   ctx.fillStyle = '#ECE4D2'
   ctx.fillRect(0, 0, cw, ch)
 
-  // 居中画 grid
-  const ox = Math.floor((cw - W) / 2)
-  const oy = Math.floor((ch - H) / 2)
-  ctx.translate(Math.max(0, ox), Math.max(0, oy))
+  // 居中 + pan 偏移
+  const ox = Math.floor((cw - W) / 2) + panX.value
+  const oy = Math.floor((ch - H) / 2) + panY.value
+  ctx.translate(ox, oy)
 
-  drawGrid(ctx, store.hexGrid, store.rows, store.cols, bp, store.showCodes, store.showZones, store.brand)
+  drawGrid(ctx, store.hexGrid, store.rows, store.cols, bpX, bpY, store.showCodes, store.showZones, store.brand)
 
   if (store.mode === 'track') {
     drawProgressOverlay(
@@ -187,7 +198,8 @@ function drawPattern(cw: number, ch: number): void {
       store.placed,
       store.rows,
       store.cols,
-      bp,
+      bpX,
+      bpY,
       store.showZones,
       store.guide,
       store.routeOrder,
@@ -230,11 +242,15 @@ async function pickImage(): Promise<void> {
 }
 
 function onCanvasTap(e: any): void {
-  // 无图 / 视图模式：点击画布 = 选择图片
-  if (!store.srcData || store.mode === 'view') {
-    pickImage()
+  // #ifdef H5
+  // 刚拖完，忽略这次 click（mouseup 会触发 click），避免 drag 末尾误触
+  if (justDragged) {
+    justDragged = false
     return
   }
+  // #endif
+  // 选图入口已移到工具栏按钮，canvas-scroll 点击只在进度模式下标记格子
+  if (!store.srcData || store.mode !== 'track') return
   // 进度模式：点击 = 标记/取消已拼
   const rawX = e.detail?.x ?? e.clientX ?? e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX
   const rawY = e.detail?.y ?? e.clientY ?? e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY
@@ -245,25 +261,77 @@ function onCanvasTap(e: any): void {
     .select('.canvas-scroll')
     .boundingClientRect((rect: any) => {
       if (!rect) return
-      const border = 3
-      const cw = rect.width - 2 * border
-      const ch = rect.height - 2 * border
-      const x = rawX - rect.left - border
-      const y = rawY - rect.top - border
-      const bp = fitBp(cw, ch)
-      const M = store.showZones ? Math.round(bp * 1.7) : 0
-      const W = store.cols * bp + 2 * M
-      const H = store.rows * bp + 2 * M
-      const ox = Math.floor((cw - W) / 2)
-      const oy = Math.floor((ch - H) / 2)
-      const c = Math.floor((x - ox - M) / bp)
-      const r = Math.floor((y - oy - M) / bp)
+      const cw = rect.width
+      const ch = rect.height
+      const x = rawX - rect.left
+      const y = rawY - rect.top
+      const { bpX, bpY } = fitBp(cw, ch)
+      const Mx = store.showZones ? Math.round(bpX * 1.7) : 0
+      const My = store.showZones ? Math.round(bpY * 1.7) : 0
+      const W = store.cols * bpX + 2 * Mx
+      const H = store.rows * bpY + 2 * My
+      const ox = Math.floor((cw - W) / 2) + panX.value
+      const oy = Math.floor((ch - H) / 2) + panY.value
+      const c = Math.floor((x - ox - Mx) / bpX)
+      const r = Math.floor((y - oy - My) / bpY)
       if (r < 0 || r >= store.rows || c < 0 || c >= store.cols) return
       store.togglePlaced(r, c)
       nextTick(() => render())
     })
     .exec()
 }
+
+// H5 专属：滚轮缩放 + 鼠标拖动 pan（mp-weixin 无鼠标事件，靠手势）
+// #ifdef H5
+let dragging = false
+let justDragged = false  // 区分 drag 和 click：移动 > 3px 才算 drag，避免拖动完触发 pickImage
+let dragStartX = 0
+let dragStartY = 0
+let dragStartPanX = 0
+let dragStartPanY = 0
+
+function onWheel(e: WheelEvent): void {
+  if (!store.srcData) return
+  const dy = e.deltaY || 0
+  if (dy === 0) return
+  const step = dy > 0 ? -0.1 : 0.1
+  const next = Math.min(2.6, Math.max(0.5, +(store.zoom + step).toFixed(2)))
+  if (next !== store.zoom) {
+    store.setZoom(next)
+  }
+}
+
+function onMouseDown(e: MouseEvent): void {
+  if (!store.srcData) return
+  // 只在 zoom > 1（grid 比 canvas 大）时才允许拖动；zoom <= 1 拖动会让像素图偏离中心
+  if (store.zoom <= 1.01) return
+  dragging = true
+  justDragged = false
+  dragStartX = e.clientX
+  dragStartY = e.clientY
+  dragStartPanX = panX.value
+  dragStartPanY = panY.value
+  e.preventDefault()
+}
+
+function onMouseMove(e: MouseEvent): void {
+  if (!dragging) return
+  const dx = e.clientX - dragStartX
+  const dy = e.clientY - dragStartY
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) justDragged = true
+  panX.value = dragStartPanX + dx
+  panY.value = dragStartPanY + dy
+  nextTick(() => render())
+}
+
+function onMouseUp(): void {
+  if (dragging && justDragged) {
+    // drag 结束后短暂屏蔽接下来的 click，避免触发 pickImage / togglePlaced
+    setTimeout(() => { justDragged = false }, 150)
+  }
+  dragging = false
+}
+// #endif
 
 async function onExport(): Promise<void> {
   if (exporting.value || !store.srcData) return
@@ -345,12 +413,29 @@ onMounted(() => {
       fetchCanvasNode().then(() => render())
     }, 50)
   })
+  // #ifdef H5
+  // uni-app @wheel 在 <view> 上不一定绑定成功，手动 addEventListener 确保 pan/zoom 生效
+  setTimeout(() => {
+    const el = document.querySelector('.canvas-scroll')
+    if (!el) return
+    el.addEventListener('wheel', onWheel as EventListener, { passive: false })
+    el.addEventListener('mousedown', onMouseDown as EventListener)
+    // mousemove/up 绑 window，拖出元素也能继续拖
+    window.addEventListener('mousemove', onMouseMove as EventListener)
+    window.addEventListener('mouseup', onMouseUp as EventListener)
+  }, 100)
+  // #endif
 })
 
 // watch UI 状态变化触发 render（primitive sources，不 deep walk typed array）
 watch(() => store.mode, () => nextTick(() => render()))
-watch(() => store.size, () => nextTick(() => render()))
-watch(() => store.zoom, () => nextTick(() => render()))
+watch(() => store.brand, () => nextTick(() => render()))
+watch(() => store.size, () => { panX.value = 0; panY.value = 0; nextTick(() => render()) })
+// zoom 回到 1 时自动归位 pan（避免像素图偏在一边）
+watch(() => store.zoom, (z) => {
+  if (z <= 1.01) { panX.value = 0; panY.value = 0 }
+  nextTick(() => render())
+})
 watch(() => store.showZones, () => nextTick(() => render()))
 watch(() => store.showCodes, () => nextTick(() => render()))
 watch(() => store.guide, () => nextTick(() => render()))
@@ -373,14 +458,31 @@ watch(() => store.placed, () => {
         <text class="title">拼豆智能助手</text>
       </view>
       <view class="spacer" />
-      <view class="badge">主导色提取 · MARD</view>
+      <view class="brand-tabs">
+        <view
+          v-for="b in BRANDS"
+          :key="b"
+          class="brand-tab"
+          :class="{ active: store.brand === b }"
+          @tap="store.setBrand(b)"
+        >{{ b }}</view>
+      </view>
     </view>
 
     <view class="layout">
-      <view class="card canvas-card">
+      <view class="card canvas-card" :style="canvasCardStyle">
         <ProgressStrip />
 
-        <view class="canvas-scroll" :style="canvasScrollStyle" @tap="onCanvasTap">
+        <view
+          class="canvas-scroll"
+          :style="canvasScrollStyle"
+          @tap="onCanvasTap"
+          @wheel.prevent="onWheel"
+          @mousedown="onMouseDown"
+          @mousemove="onMouseMove"
+          @mouseup="onMouseUp"
+          @mouseleave="onMouseUp"
+        >
           <!-- #ifndef H5 -->
           <image
             v-if="patternImageSrc"
@@ -392,20 +494,44 @@ watch(() => store.placed, () => {
           <canvas :id="canvasId" type="2d" class="pattern-canvas" />
           <!-- #endif -->
           <view v-if="!store.srcData && !patternImageSrc" class="pick-prompt">
-            <text class="big">点击此处选择图片</text>
-            <text class="small">上传照片或已有图纸</text>
+            <text class="big">点右侧「选择图片」按钮</text>
+            <text class="small">上传照片生成像素图</text>
           </view>
-        </view>
-
-        <view class="footnote">
-          主导色像素化 + 291 色最近欧氏映射 + 每豆 MARD 真实色号 + 每 10 格分区。
         </view>
       </view>
 
       <view class="sidebar">
-        <Toolbar @viewOrig="showOrig = true" @export="onExport" />
+        <Toolbar @viewOrig="showOrig = true" @export="onExport" @pick="pickImage" />
         <StatsPanel />
+        <view class="card guide-card">
+          <view class="group-title">使用说明</view>
+          <view class="guide-list">
+            <view class="guide-item"><text class="step">1</text>点底部「选择图片」上传</view>
+            <view class="guide-item"><text class="step">2</text>切尺寸 29/50/80/100</view>
+            <view class="guide-item"><text class="step">3</text>顶部切品牌色号体系</view>
+            <view class="guide-item"><text class="step">4</text>开「分区」「色号」→ 照图拼</view>
+            <view class="guide-item"><text class="step">5</text>「进度」模式点格子记录已拼</view>
+            <view class="guide-item"><text class="step">6</text>滚轮缩放，按住拖动平移</view>
+          </view>
+        </view>
       </view>
+    </view>
+
+    <view class="legend-bottom" v-if="store.srcData">
+      <view class="legend-bottom-title">色号 → 数量（{{ store.sortedItems.length }} 色）</view>
+      <scroll-view scroll-x class="legend-scroll-x" show-scrollbar="false">
+        <view class="legend-row">
+          <view
+            v-for="[hex, n] in store.sortedItems"
+            :key="hex"
+            class="bead-chip"
+          >
+            <view class="bead-swatch" :style="{ background: hex }" />
+            <text class="bead-code">{{ BRAND_CODES[store.brand][hex] }}</text>
+            <text class="bead-count">×{{ n }}</text>
+          </view>
+        </view>
+      </scroll-view>
     </view>
 
     <OrigModal :show="showOrig" :src="store.origTempFilePath" @close="showOrig = false" />
@@ -459,14 +585,28 @@ watch(() => store.placed, () => {
 .spacer {
   flex: 1;
 }
-.badge {
-  font-weight: 600;
-  font-size: 11px;
-  padding: 5px 11px;
-  background: $ink;
-  color: #fff;
+.brand-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  background: $bg-2;
+  border: $border;
   border-radius: 30px;
   box-shadow: $shadow-sm;
+  flex-wrap: wrap;
+}
+.brand-tab {
+  font-weight: 600;
+  font-size: 11.5px;
+  padding: 5px 11px;
+  border-radius: 30px;
+  color: $ink-soft;
+  white-space: nowrap;
+  cursor: pointer;
+  &.active {
+    background: $ink;
+    color: #fff;
+  }
 }
 .card {
   background: $surface;
@@ -479,6 +619,8 @@ watch(() => store.placed, () => {
   display: flex;
   flex-direction: column;
   background: $canvas-bg;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 .layout {
   display: flex;
@@ -493,9 +635,9 @@ watch(() => store.placed, () => {
   gap: 14px;
 }
 @media (min-width: 900px) {
-  .layout { flex-direction: row; }
-  .canvas-card { flex: 1 1 auto; min-width: 0; }
-  .sidebar { flex: 0 0 300px; width: 300px; }
+  .layout { flex-direction: row; justify-content: center; }
+  .canvas-card { flex: 0 1 auto; min-width: 0; }
+  .sidebar { flex: 0 0 280px; width: 280px; }
   .sidebar :deep(.toolbar) { flex-direction: column; align-items: stretch; padding: 0; gap: 12px; }
   .sidebar :deep(.tool-label) { margin-bottom: -6px; }
   .sidebar :deep(.mode-toggle),
@@ -506,16 +648,108 @@ watch(() => store.placed, () => {
   .sidebar :deep(.actions) { flex-direction: column; align-items: stretch; }
   .sidebar :deep(.btn) { justify-content: center; }
 }
-.canvas-scroll {
-  background: radial-gradient(circle, rgba(35, 32, 46, 0.1) 1.1px, transparent 1.6px) 0 0 / 14px 14px,
-    $bg-2;
+.legend-bottom {
+  flex: 0 0 auto;
+  background: $surface;
   border: $border;
-  border-radius: 12px;
-  /* 占满卡片宽度；inline style 设 aspect-ratio 让比例匹配 grid */
+  border-radius: $radius;
+  box-shadow: $shadow;
+  padding: 10px 14px;
+  margin-top: 12px;
+}
+.legend-bottom-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: $ink-soft;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+}
+.legend-scroll-x {
+  white-space: nowrap;
+}
+.legend-row {
+  display: inline-flex;
+  gap: 7px;
+  padding-right: 4px;
+}
+.bead-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 2px solid $ink;
+  border-radius: 9px;
+  background: $surface;
+  box-shadow: 1.5px 1.5px 0 $ink;
+  flex: 0 0 auto;
+}
+.bead-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid $ink;
+  flex: 0 0 auto;
+}
+.bead-code {
+  font-weight: 700;
+  font-size: 13px;
+}
+.bead-count {
+  font-weight: 600;
+  font-size: 12px;
+  color: $ink-soft;
+}
+.guide-card {
+  background: $surface;
+  border: $border;
+  border-radius: $radius;
+  box-shadow: $shadow;
+  padding: 14px;
+}
+.guide-card .group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: $ink-soft;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 9px;
+  text-align: center;
+}
+.guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.guide-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: $ink;
+  line-height: 1.45;
+}
+.guide-item .step {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: $orange;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.canvas-scroll {
+  background: transparent;
   width: 100%;
   margin: 0 auto;
   flex: 1 1 auto;
-  min-height: 200px;
+  min-height: 120px;
   position: relative;
   box-sizing: border-box;
   overflow: hidden;
@@ -565,13 +799,6 @@ watch(() => store.placed, () => {
   .small {
     font-size: 12.5px;
   }
-}
-.footnote {
-  margin-top: 8px;
-  font-size: 11.5px;
-  color: $ink-soft;
-  font-weight: 600;
-  line-height: 1.6;
 }
 .export-canvas {
   position: fixed;
