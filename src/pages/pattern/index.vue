@@ -3,6 +3,7 @@ import { ref, computed, watch, getCurrentInstance, onMounted, nextTick } from 'v
 import { usePatternStore } from '@/stores/pattern'
 import { drawGrid, drawProgressOverlay, drawComposed } from '@/utils/canvasDraw'
 import { saveImageToAlbum } from '@/utils/permissions'
+import { pickAndDecodeImage } from '@/composables/useImageDecode'
 import Toolbar from '@/components/pattern/Toolbar.vue'
 import ProgressStrip from '@/components/pattern/ProgressStrip.vue'
 import StatsPanel from '@/components/pattern/StatsPanel.vue'
@@ -214,12 +215,26 @@ function drawPattern(cw: number, ch: number): void {
   dumpCanvasStats(canvas, ctx, cw, ch)
 }
 
-function onPicked(): void {
-  nextTick(() => render())
+async function pickImage(): Promise<void> {
+  try {
+    const picked = await pickAndDecodeImage()
+    if (picked) {
+      store.ingest(picked)
+      nextTick(() => render())
+    }
+  } catch (e) {
+    console.error('pick image failed', e)
+    uni.showToast({ title: '图片加载失败', icon: 'none' })
+  }
 }
 
 function onCanvasTap(e: any): void {
-  if (store.mode !== 'track' || !store.srcData) return
+  // 无图 / 视图模式：点击画布 = 选择图片
+  if (!store.srcData || store.mode === 'view') {
+    pickImage()
+    return
+  }
+  // 进度模式：点击 = 标记/取消已拼
   const rawX = e.detail?.x ?? e.clientX ?? e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX
   const rawY = e.detail?.y ?? e.clientY ?? e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY
   if (rawX == null || rawY == null) return
@@ -361,33 +376,37 @@ watch(() => store.placed, () => {
       <view class="badge">主导色提取 · MARD</view>
     </view>
 
-    <view class="card canvas-card">
-      <Toolbar @picked="onPicked" @viewOrig="showOrig = true" @export="onExport" />
-      <ProgressStrip />
+    <view class="layout">
+      <view class="card canvas-card">
+        <ProgressStrip />
 
-      <view class="canvas-scroll" :style="canvasScrollStyle" @tap="onCanvasTap">
-        <!-- #ifndef H5 -->
-        <image
-          v-if="patternImageSrc"
-          ref="imageRef"
-          :src="patternImageSrc"
-          mode="scaleToFill"
-          class="pattern-image"
-        />
-        <canvas :id="canvasId" type="2d" class="pattern-canvas" />
-        <!-- #endif -->
-        <view v-if="!store.srcData && !patternImageSrc" class="pick-prompt">
-          <text class="big">选择一张图片开始</text>
-          <text class="small">点击上方「选择图片」</text>
+        <view class="canvas-scroll" :style="canvasScrollStyle" @tap="onCanvasTap">
+          <!-- #ifndef H5 -->
+          <image
+            v-if="patternImageSrc"
+            ref="imageRef"
+            :src="patternImageSrc"
+            mode="scaleToFill"
+            class="pattern-image"
+          />
+          <canvas :id="canvasId" type="2d" class="pattern-canvas" />
+          <!-- #endif -->
+          <view v-if="!store.srcData && !patternImageSrc" class="pick-prompt">
+            <text class="big">点击此处选择图片</text>
+            <text class="small">上传照片或已有图纸</text>
+          </view>
+        </view>
+
+        <view class="footnote">
+          主导色像素化 + 291 色最近欧氏映射 + 每豆 MARD 真实色号 + 每 10 格分区。
         </view>
       </view>
 
-      <view class="footnote">
-        主导色像素化 + 291 色最近欧氏映射 + 每豆 MARD 真实色号 + 每 10 格分区。
+      <view class="sidebar">
+        <Toolbar @viewOrig="showOrig = true" @export="onExport" />
+        <StatsPanel />
       </view>
     </view>
-
-    <StatsPanel />
 
     <OrigModal :show="showOrig" :src="store.origTempFilePath" @close="showOrig = false" />
 
@@ -454,7 +473,25 @@ watch(() => store.placed, () => {
 }
 .canvas-card {
   padding: 12px;
-  margin-bottom: 14px;
+}
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+@media (min-width: 900px) {
+  .layout { flex-direction: row; align-items: flex-start; }
+  .canvas-card { flex: 1 1 auto; min-width: 0; }
+  .sidebar { flex: 0 0 300px; width: 300px; }
+  .sidebar :deep(.toolbar) { flex-direction: column; align-items: stretch; padding: 0; }
+  .sidebar :deep(.zoom-slider) { width: 100%; }
+  .sidebar :deep(.actions) { flex-direction: column; align-items: stretch; }
+  .sidebar :deep(.btn) { justify-content: center; }
 }
 .canvas-scroll {
   background: radial-gradient(circle, rgba(35, 32, 46, 0.1) 1.1px, transparent 1.6px) 0 0 / 14px 14px,
