@@ -22,11 +22,8 @@ const patternImageSrc = ref('')
 const imageRef = ref<any>(null)
 
 // canvas-scroll 的 aspect-ratio = grid 比例（cols:rows），同时设 CSS 变量给 max-width 用
-const canvasScrollStyle = computed(() => {
-  if (!store.srcData || store.cols === 0 || store.rows === 0) return ''
-  const ratio = store.cols / store.rows
-  return `aspect-ratio: ${store.cols} / ${store.rows}; --grid-ratio: ${ratio}`
-})
+// 画布区用 flex 撑满高度，不再用 aspect-ratio（像素图按比例居中，米黄底填满整块）
+const canvasScrollStyle = computed(() => '')
 
 // 用 canvas 自己的 CSS 尺寸算 bp（不是父容器 scroll-view 的尺寸）
 function fitBp(canvasCssW: number, canvasCssH: number): number {
@@ -419,6 +416,8 @@ watch(() => store.placed, () => {
   min-height: 100vh;
   padding: 14px clamp(12px, 3vw, 32px) 24px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 .header {
   display: flex;
@@ -473,11 +472,15 @@ watch(() => store.placed, () => {
 }
 .canvas-card {
   padding: 12px;
+  display: flex;
+  flex-direction: column;
 }
 .layout {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .sidebar {
   display: flex;
@@ -485,7 +488,7 @@ watch(() => store.placed, () => {
   gap: 14px;
 }
 @media (min-width: 900px) {
-  .layout { flex-direction: row; align-items: flex-start; }
+  .layout { flex-direction: row; }
   .canvas-card { flex: 1 1 auto; min-width: 0; }
   .sidebar { flex: 0 0 300px; width: 300px; }
   .sidebar :deep(.toolbar) { flex-direction: column; align-items: stretch; padding: 0; }
@@ -501,7 +504,8 @@ watch(() => store.placed, () => {
   /* 占满卡片宽度；inline style 设 aspect-ratio 让比例匹配 grid */
   width: 100%;
   margin: 0 auto;
-  min-height: 300rpx;
+  flex: 1 1 auto;
+  min-height: 200px;
   position: relative;
   box-sizing: border-box;
   overflow: hidden;
