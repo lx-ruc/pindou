@@ -21,9 +21,13 @@ const patternImageSrc = ref('')
 // image 元素 ref，tap 时拿 boundingClientRect（e.currentTarget 在 uni-app H5 下可能指向 canvas）
 const imageRef = ref<any>(null)
 
-// canvas-scroll 的 aspect-ratio = grid 比例（cols:rows），同时设 CSS 变量给 max-width 用
-// 画布区用 flex 撑满高度，不再用 aspect-ratio（像素图按比例居中，米黄底填满整块）
-const canvasScrollStyle = computed(() => '')
+// canvas-scroll 用 aspect-ratio 让宽高比 = grid 比例（cols:rows）；
+// max-height + 对应的 max-width 保证宽屏下 canvas-scroll 是正方形（grid 填满，无两侧留白）
+const canvasScrollStyle = computed(() => {
+  if (!store.srcData || store.cols === 0 || store.rows === 0) return ''
+  const ratio = store.cols / store.rows
+  return `aspect-ratio: ${store.cols} / ${store.rows}; max-height: 75vh; max-width: calc(75vh * ${ratio}); margin: 0 auto`
+})
 
 // 用 canvas 自己的 CSS 尺寸算 bp（不是父容器 scroll-view 的尺寸）
 function fitBp(canvasCssW: number, canvasCssH: number): number {
