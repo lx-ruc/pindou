@@ -1,6 +1,12 @@
 # H5 像素图显示问题 — 诊断记录
 
-> 状态：**未解决（H5 端）**。MP 端已修。本文记录根因与已尝试方案，供接手者继续。
+> 状态：**✅ 已解决（H5 + MP 均完整显示）**
+>
+> 根因：uni-app H5 的 `<canvas type="2d">` 元素，原生 `getContext('2d')` 绘制坏（`fillStyle` 切换不生效——隔离测试：原生 `createElement` canvas 画 4 色读回正确，uni `<canvas>` 画同样 4 色读回却全红）。与「最初纯 HTML demo（原生 canvas）正常、转 uni 后异常」的现象完全一致。
+>
+> 修复：H5 端改用 `document.createElement('canvas')` 的纯原生 canvas，挂到 `.canvas-scroll` 上直接绘制（同 HTML demo），`fetchCanvasNode` 条件编译区分两端；MP 端仍用 selectorQuery node + `toTempFilePath`（源区域=整个 buffer）。验证：puppeteer 上传四色图 → canvas 四象限红/蓝/绿/黄齐全（60712 / 59059 / 64215 / 64313）。
+>
+> 下文为诊断过程（历史记录）。
 
 ## 症状
 H5（`npm run dev:h5`）上传图片后，像素图**只显示左上角一部分**（用户反馈：4 字图只露出"智"），或整片发红。MP（微信小程序）经修复后正常。

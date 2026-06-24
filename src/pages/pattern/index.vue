@@ -50,6 +50,24 @@ let canvasCssH = 0
 // 拿 canvas node + dpr（canvas-scroll 尺寸每次 render 动态拿，因为 aspect-ratio 会变）
 function fetchCanvasNode(): Promise<void> {
   return new Promise((resolve) => {
+    // #ifdef H5
+    // H5：uni <canvas type="2d"> 的原生 getContext 绘制坏（fillStyle 切换不生效，
+    // 实测画 4 色读回全红）。改用 document.createElement 的纯原生 canvas，
+    // 挂到 canvas-scroll 上，原生 2d context 绘制正常且直接显示。
+    const container = document.querySelector('.canvas-scroll')
+    if (container) {
+      let c = container.querySelector('canvas.native-canvas') as HTMLCanvasElement | null
+      if (!c) {
+        c = document.createElement('canvas')
+        c.className = 'native-canvas'
+        container.appendChild(c)
+      }
+      canvasNode = c
+      canvasDpr = window.devicePixelRatio || 1
+    }
+    resolve()
+    // #endif
+    // #ifndef H5
     uni.createSelectorQuery()
       .in(instance)
       .select('#' + canvasId)
@@ -61,6 +79,7 @@ function fetchCanvasNode(): Promise<void> {
         resolve()
       })
       .exec()
+    // #endif
   })
 }
 
@@ -171,12 +190,9 @@ function drawPattern(cw: number, ch: number): void {
     )
   }
 
-  // 导出 PNG 给 <image> 显示（绕过 mp-weixin canvas 显示层 bug）
-  // canvas buffer 尺寸 = cw × ch，导出整个 buffer
+  // #ifndef H5
+  // MP：canvas 离屏，导出整张 buffer PNG 给 <image> 显示（绕过 canvas 显示层 bug）
   if (typeof canvas.toTempFilePath === 'function') {
-    // 源区域必须是整个 buffer（canvas.width/height = cw*dpr）。
-    // 若传 CSS 尺寸 cw/ch，WeChat 会按 buffer 像素解释 → 只截左上 1/dpr，
-    // <image> 显示出来就是被裁的一角。
     canvas.toTempFilePath({
       x: 0,
       y: 0,
@@ -188,13 +204,9 @@ function drawPattern(cw: number, ch: number): void {
       success: (r: any) => { patternImageSrc.value = r.tempFilePath },
       fail: (e: any) => { console.error('[render] toTempFilePath failed', e) },
     })
-  } else {
-    try {
-      patternImageSrc.value = canvas.toDataURL('image/png')
-    } catch (e) {
-      console.error('[render] toDataURL failed', e)
-    }
   }
+  // #endif
+  // H5：原生 canvas 直接显示，无需导出
 
   dumpCanvasStats(canvas, ctx, cw, ch)
 }
@@ -208,29 +220,30 @@ function onCanvasTap(e: any): void {
   const rawX = e.detail?.x ?? e.clientX ?? e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX
   const rawY = e.detail?.y ?? e.clientY ?? e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY
   if (rawX == null || rawY == null) return
-
-  // 用 imageRef 拿 image 元素的 boundingClientRect
-  // （e.currentTarget 在 uni-app H5 下可能指向 canvas 而非 image）
-  const imgEl = imageRef.value?.$el || imageRef.value
-  const rect = imgEl?.getBoundingClientRect
-    ? imgEl.getBoundingClientRect()
-    : { left: 0, top: 0, width: canvasCssW, height: canvasCssH }
-
-  const x = rawX - rect.left
-  const y = rawY - rect.top
-
-  const bp = fitBp(rect.width, rect.height)
-  const M = store.showZones ? Math.round(bp * 1.7) : 0
-  const W = store.cols * bp + 2 * M
-  const H = store.rows * bp + 2 * M
-  const ox = Math.floor((rect.width - W) / 2)
-  const oy = Math.floor((rect.height - H) / 2)
-  const c = Math.floor((x - ox - M) / bp)
-  const r = Math.floor((y - oy - M) / bp)
-  console.log('[onCanvasTap] raw=(' + rawX + ',' + rawY + ') rect=' + rect.width + 'x' + rect.height + ' cell r=' + r + ' c=' + c)
-  if (r < 0 || r >= store.rows || c < 0 || c >= store.cols) return
-  store.togglePlaced(r, c)
-  nextTick(() => render())
+  // 用 canvas-scroll 的 rect 做坐标映射（H5 原生 canvas / MP image 都填满它）
+  uni.createSelectorQuery()
+    .in(instance)
+    .select('.canvas-scroll')
+    .boundingClientRect((rect: any) => {
+      if (!rect) return
+      const border = 3
+      const cw = rect.width - 2 * border
+      const ch = rect.height - 2 * border
+      const x = rawX - rect.left - border
+      const y = rawY - rect.top - border
+      const bp = fitBp(cw, ch)
+      const M = store.showZones ? Math.round(bp * 1.7) : 0
+      const W = store.cols * bp + 2 * M
+      const H = store.rows * bp + 2 * M
+      const ox = Math.floor((cw - W) / 2)
+      const oy = Math.floor((ch - H) / 2)
+      const c = Math.floor((x - ox - M) / bp)
+      const r = Math.floor((y - oy - M) / bp)
+      if (r < 0 || r >= store.rows || c < 0 || c >= store.cols) return
+      store.togglePlaced(r, c)
+      nextTick(() => render())
+    })
+    .exec()
 }
 
 async function onExport(): Promise<void> {
@@ -349,20 +362,17 @@ watch(() => store.placed, () => {
       <Toolbar @picked="onPicked" @viewOrig="showOrig = true" @export="onExport" />
       <ProgressStrip />
 
-      <view class="canvas-scroll" :style="canvasScrollStyle">
+      <view class="canvas-scroll" :style="canvasScrollStyle" @tap="onCanvasTap">
+        <!-- #ifndef H5 -->
         <image
           v-if="patternImageSrc"
           ref="imageRef"
           :src="patternImageSrc"
-          mode="aspectFit"
+          mode="scaleToFill"
           class="pattern-image"
-          @tap="onCanvasTap"
         />
-        <canvas
-          :id="canvasId"
-          type="2d"
-          class="pattern-canvas"
-        />
+        <canvas :id="canvasId" type="2d" class="pattern-canvas" />
+        <!-- #endif -->
         <view v-if="!store.srcData && !patternImageSrc" class="pick-prompt">
           <text class="big">选择一张图片开始</text>
           <text class="small">点击上方「选择图片」</text>
@@ -474,6 +484,15 @@ watch(() => store.placed, () => {
   object-fit: fill;
   box-sizing: border-box;
 }
+/* #ifdef H5 */
+/* H5 原生 canvas（document.createElement 挂入），直接显示 */
+.native-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+/* #endif */
 .pick-prompt {
   position: absolute;
   inset: 0;
