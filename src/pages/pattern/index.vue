@@ -454,16 +454,6 @@ watch(() => store.placed, () => {
       <view class="title-wrap">
         <text class="title">拼豆智能助手</text>
       </view>
-      <view class="spacer" />
-      <view class="brand-tabs">
-        <view
-          v-for="b in BRANDS"
-          :key="b"
-          class="brand-tab"
-          :class="{ active: store.brand === b }"
-          @tap="store.setBrand(b)"
-        >{{ b }}</view>
-      </view>
     </view>
 
     <view class="layout">
@@ -498,6 +488,15 @@ watch(() => store.placed, () => {
       </view>
 
       <view class="sidebar">
+        <view class="brand-tabs">
+          <view
+            v-for="b in BRANDS"
+            :key="b"
+            class="brand-tab"
+            :class="{ active: store.brand === b }"
+            @tap="store.setBrand(b)"
+          >{{ b }}</view>
+        </view>
         <Toolbar @viewOrig="showOrig = true" @export="onExport" @pick="pickImage" />
         <StatsPanel />
         <view class="card guide-card">
@@ -583,20 +582,24 @@ watch(() => store.placed, () => {
   flex: 1;
 }
 .brand-tabs {
-  display: inline-flex;
+  display: flex;
   gap: 4px;
-  padding: 3px;
+  padding: 4px;
   background: $bg-2;
   border: $border;
-  border-radius: 30px;
+  border-radius: 12px;
   box-shadow: $shadow-sm;
   flex-wrap: wrap;
+  width: 100%;
+  box-sizing: border-box;
 }
 .brand-tab {
+  flex: 1 1 0;
+  text-align: center;
   font-weight: 600;
-  font-size: 11.5px;
-  padding: 5px 11px;
-  border-radius: 30px;
+  font-size: 11px;
+  padding: 6px 4px;
+  border-radius: 9px;
   color: $ink-soft;
   white-space: nowrap;
   cursor: pointer;
