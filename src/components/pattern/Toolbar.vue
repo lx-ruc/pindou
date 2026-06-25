@@ -7,6 +7,17 @@ const emit = defineEmits<{ (e: 'viewOrig'): void; (e: 'export'): void; (e: 'pick
 const store = usePatternStore()
 
 const SIZES = [29, 50, 80, 100]
+const SIZE_MIN = 50
+const SIZE_MAX = 200
+
+// 显示 cols × rows（拼豆板的格子数，符合实际拼豆尺寸表达）
+const sizeDisplay = computed(() => {
+  const aspect = store.imgAspect
+  if (!aspect || aspect === 1) return `${store.size}×${store.size}`
+  const long = store.size
+  const short = Math.max(1, Math.round(long * Math.min(aspect, 1 / aspect)))
+  return aspect >= 1 ? `${long}×${short}` : `${short}×${long}`
+})
 
 // ghost 态：已恢复历史图纸但原图未存（srcData=null），调参/原图需重传图
 const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
@@ -27,16 +38,22 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
       >进度</view>
     </view>
 
-    <view class="tool-label ghost-hint" v-if="ghost">已恢复历史图纸 · 重新上传图后可调参</view>
-    <view class="tool-label" v-if="!ghost">尺寸</view>
-    <view class="seg" v-if="!ghost">
-      <view
-        v-for="s in SIZES"
-        :key="s"
-        class="seg-btn"
-        :class="{ active: store.size === s }"
-        @tap="store.setSize(s)"
-      >{{ s }}</view>
+    <view class="tool-label">尺寸</view>
+    <view class="zoom-row">
+      <view class="zoom-btn" @tap="store.setSize(Math.max(SIZE_MIN, store.size - 5))">−</view>
+      <slider
+        class="zoom-slider"
+        :min="SIZE_MIN"
+        :max="SIZE_MAX"
+        :step="1"
+        :value="store.size"
+        activeColor="#F77F00"
+        backgroundColor="#F3EAD6"
+        block-size="18"
+        @change="(e: any) => store.setSize(e.detail.value)"
+      />
+      <view class="zoom-btn" @tap="store.setSize(Math.min(SIZE_MAX, store.size + 5))">+</view>
+      <view class="zoom-pct">{{ sizeDisplay }}</view>
     </view>
 
     <view class="tool-label">缩放</view>

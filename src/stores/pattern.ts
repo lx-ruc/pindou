@@ -5,6 +5,7 @@ import { DEFAULT_BRAND } from '@/utils/palette'
 import { pixelize } from '@/utils/pixelize'
 import { computeCounts, computeRoute, findNextUnplaced } from '@/utils/route'
 import { mergePalette, mergeSpatial } from '@/utils/colorMerge'
+import { hexToRgb } from '@/utils/color'
 import type { Snapshot } from '@/utils/persist'
 
 export const usePatternStore = defineStore('pattern', () => {
@@ -18,7 +19,7 @@ export const usePatternStore = defineStore('pattern', () => {
   // 设置
   const brand = ref<Brand>(DEFAULT_BRAND)
   const mode = ref<Mode>('view')
-  const size = ref(50)
+  const size = ref(52)
   const zoom = ref(1)
   const showZones = ref(true)
   const showCodes = ref(true)
@@ -76,8 +77,29 @@ export const usePatternStore = defineStore('pattern', () => {
   }
 
   function recompute(): void {
-    const raw = srcData.value
-    if (!raw) return
+    let raw = srcData.value
+    let pw = srcW.value
+    let ph = srcH.value
+    // ghost 态：srcData 没了（刷新后），从持久化的 hexGrid 反推虚拟像素，让调参依然生效
+    if (!raw) {
+      const hg = hexGrid.value
+      const r0 = rows.value
+      const c0 = cols.value
+      if (r0 === 0 || c0 === 0 || hg.length === 0) return
+      const data = new Uint8ClampedArray(r0 * c0 * 4)
+      for (let y = 0; y < r0; y++) {
+        const row = hg[y]
+        if (!row) continue
+        for (let x = 0; x < c0; x++) {
+          const [R, G, B] = hexToRgb(row[x])
+          const i = (y * c0 + x) * 4
+          data[i] = R; data[i + 1] = G; data[i + 2] = B; data[i + 3] = 255
+        }
+      }
+      raw = data
+      pw = c0
+      ph = r0
+    }
     ;(globalThis as any).__pindouLogs = (globalThis as any).__pindouLogs || []
     const t0 = Date.now()
     const _log = (tag: string) => {
@@ -86,8 +108,8 @@ export const usePatternStore = defineStore('pattern', () => {
     _log('start')
     const src: ImagePixels = {
       data: raw,
-      width: srcW.value,
-      height: srcH.value,
+      width: pw,
+      height: ph,
     }
     const { rows: r, cols: c, hexGrid: hg0 } = pixelize(src, size.value, imgAspect.value)
     _log('after pixelize')
