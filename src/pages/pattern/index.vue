@@ -409,6 +409,8 @@ onMounted(() => {
     }, 50)
   })
   // #ifdef H5
+  // navigationStyle:custom 不再设置 document.title，显式补上（否则浏览器标签显示 undefined）
+  document.title = '拼豆智能助手'
   // uni-app @wheel 在 <view> 上不一定绑定成功，手动 addEventListener 确保 pan/zoom 生效
   setTimeout(() => {
     const el = document.querySelector('.canvas-scroll')
