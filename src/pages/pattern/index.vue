@@ -176,6 +176,9 @@ function drawPattern(cw: number, ch: number): void {
 
   canvas.width = Math.floor(cw * dpr)
   canvas.height = Math.floor(ch * dpr)
+  // 关键：buffer 尺寸改了后必须显式设 CSS 显示尺寸，否则 dpr>1 时 canvas 会按 buffer 尺寸显示（撑大溢出 canvas-scroll）
+  canvas.style.width = cw + 'px'
+  canvas.style.height = ch + 'px'
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.scale(dpr, dpr)
@@ -490,8 +493,6 @@ watch(() => store.placed, () => {
 
     <view class="layout">
       <view class="card canvas-card" :style="canvasCardStyle">
-        <ProgressStrip />
-
         <view
           class="canvas-scroll"
           :style="canvasScrollStyle"
@@ -537,6 +538,7 @@ watch(() => store.placed, () => {
       </view>
 
       <view class="sidebar">
+        <ProgressStrip />
         <view class="brand-tabs">
           <view
             v-for="b in BRANDS"

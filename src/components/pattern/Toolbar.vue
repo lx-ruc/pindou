@@ -27,9 +27,9 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
       >进度</view>
     </view>
 
-    <view class="tool-label ghost-hint" v-if="store.mode === 'view' && ghost">已恢复历史图纸 · 重新上传图后可调参</view>
-    <view class="tool-label" v-if="store.mode === 'view' && !ghost">尺寸</view>
-    <view class="seg" v-if="store.mode === 'view' && !ghost">
+    <view class="tool-label ghost-hint" v-if="ghost">已恢复历史图纸 · 重新上传图后可调参</view>
+    <view class="tool-label" v-if="!ghost">尺寸</view>
+    <view class="seg" v-if="!ghost">
       <view
         v-for="s in SIZES"
         :key="s"
@@ -40,20 +40,25 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
     </view>
 
     <view class="tool-label">缩放</view>
-    <slider
-      class="zoom-slider"
-      :min="0.5"
-      :max="2.6"
-      :step="0.1"
-      :value="store.zoom"
-      activeColor="#F77F00"
-      backgroundColor="#F3EAD6"
-      block-size="18"
-      @change="(e: any) => store.setZoom(e.detail.value)"
-    />
+    <view class="zoom-row">
+      <view class="zoom-btn" @tap="store.setZoom(Math.max(0.5, +(store.zoom - 0.1).toFixed(2)))">−</view>
+      <slider
+        class="zoom-slider"
+        :min="0.5"
+        :max="2.6"
+        :step="0.1"
+        :value="store.zoom"
+        activeColor="#F77F00"
+        backgroundColor="#F3EAD6"
+        block-size="18"
+        @change="(e: any) => store.setZoom(e.detail.value)"
+      />
+      <view class="zoom-btn" @tap="store.setZoom(Math.min(2.6, +(store.zoom + 0.1).toFixed(2)))">+</view>
+      <view class="zoom-pct">{{ Math.round(store.zoom * 100) }}%</view>
+    </view>
 
-    <view class="tool-label" v-if="store.mode === 'view' && store.srcData">颜色合并</view>
-    <view class="merge-block" v-if="store.mode === 'view' && store.srcData">
+    <view class="tool-label" v-if="store.srcData">颜色合并</view>
+    <view class="merge-block" v-if="store.srcData">
       <view class="seg">
         <view class="seg-btn" :class="{ active: !store.mergeEnabled }" @tap="store.setMergeEnabled(false)">关</view>
         <view class="seg-btn" :class="{ active: store.mergeEnabled }" @tap="store.setMergeEnabled(true)">开</view>
@@ -105,7 +110,7 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
       </template>
     </view>
 
-    <view class="actions" v-if="store.mode === 'view'">
+    <view class="actions">
       <view class="btn ghost" @tap="emit('viewOrig')" v-if="store.origTempFilePath">
         <text>原图</text>
       </view>
@@ -174,9 +179,42 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
   color: $orange;
   font-weight: 700;
 }
+.zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
 .zoom-slider {
-  width: 110px;
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
+}
+.zoom-btn {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: $surface;
+  border: $border;
+  border-radius: 8px;
+  box-shadow: $shadow-sm;
+  font-weight: 700;
+  font-size: 16px;
+  color: $ink;
+  cursor: pointer;
+  user-select: none;
+}
+.zoom-pct {
+  flex: 0 0 auto;
+  min-width: 38px;
+  text-align: right;
+  font-weight: 700;
+  font-size: 12.5px;
+  color: $ink;
+  font-variant-numeric: tabular-nums;
 }
 .merge-block {
   display: flex;

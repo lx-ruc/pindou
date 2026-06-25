@@ -7,7 +7,7 @@ const store = usePatternStore()
 
 <template>
   <view class="panel">
-    <view class="card display-card" v-if="store.mode === 'view'">
+    <view class="card display-card">
       <view class="group-title">显示</view>
       <view class="opt-row">
         <view class="opt" :class="{ on: store.showZones }" @tap="store.toggleZones()">
