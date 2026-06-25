@@ -4,31 +4,35 @@
 
 ## 1. 技术栈选型
 
-| 层 | 技术 | 理由 |
-|----|------|------|
-| **多端框架** | **Taro 4.x**（React + TypeScript） | 字节开源，一套代码编译微信小程序 + H5，社区活跃 |
-| **状态管理** | Zustand | 轻量、无 boilerplate，比 Redux 简洁 |
-| **样式方案** | Tailwind CSS + CSS Variables | Taro 4 已支持，主题色管理方便 |
-| **UI 组件库** | NutUI React（京东） | 专为 Taro 设计，小程序兼容性好 |
-| **图像处理（前端）** | Canvas API + 浏览器/小程序原生 Canvas | 客户端零成本处理，无需上云 |
-| **图像处理（后端）** | Sharp（Node.js） | 缩放、格式转换，性能远超 Canvas |
-| **AI 抠图** | U2Net / BiRefNet（ONNX Runtime Web） | 浏览器端跑模型，避免服务器成本 |
-| **AI 生图** | SDXL 本地部署 / SiliconFlow API | 开源模型，免费额度可用 |
-| **色差算法** | CIEDE2000（Delta E 2000） | 工业标准，比欧氏距离更符合人眼 |
-| **进度识别** | OpenCV.js + 自研算法 | 透视变换 + 颜色对比，无需训练 |
-| **后端** | Hono（Node.js/Bun） | 轻量、快、类型安全 |
-| **数据库** | SQLite（开发）→ PostgreSQL（生产） | 起步轻量，可平滑迁移 |
-| **ORM** | Drizzle ORM | 类型安全，SQL-like API |
-| **对象存储** | Cloudflare R2 / 腾讯云 COS | R2 无出口费用，COS 国内快 |
-| **部署（Web）** | Vercel | 免费、自动 CI/CD |
-| **部署（小程序）** | 微信开发者工具 + 微信平台 | 国内必备 |
-| **协议** | AGPL-3.0 | 衍生作品必须开源 |
+> ✅ 已落地 · 🔜 规划中（未启动）
+
+| 层 | 技术 | 状态 | 理由 |
+|----|------|------|------|
+| **多端框架** | **uni-app 4.x**（Vue 3 + TypeScript） | ✅ | DCloud 出品，一套代码编译微信小程序 + H5，Vue 生态，Vite 构建 |
+| **状态管理** | **Pinia** | ✅ | Vue 官方推荐，轻量、类型安全 |
+| **构建工具** | **Vite 5 + @dcloudio/vite-plugin-uni** | ✅ | 快速 HMR，uni-app 官方 Vite 方案 |
+| **样式方案** | **SCSS + 全局变量**（`src/uni.scss`）+ rpx | ✅ | uni-app 原生支持，rpx 跨端响应式，主题色集中管理 |
+| **UI 组件** | **自研轻量组件**（`src/components/`） | ✅ | 不引入重型 UI 库，控制小程序主包 ≤ 2MB |
+| **图像处理（前端）** | **Canvas API** | ✅ | 客户端零成本；H5 端用原生 `document.createElement('canvas')` 绕过 uni node-canvas 显示 bug（见 [h5-canvas-display.md](./h5-canvas-display.md)） |
+| **算法核心** | **纯 TS**（`src/utils/`：pixelize / color / palette / route） | ✅ | 无 DOM / 小程序 API，跨端可移植 |
+| **单元测试** | **Vitest 2**（`tests/`） | ✅ | 覆盖 pixelize / color / palette / route |
+| **部署（Web）** | **GitHub Pages**（Actions 自动构建） | ✅ | 免费、push 即部署；线上 https://lx-ruc.github.io/pindou/ |
+| **色差算法** | CIEDE2000（Delta E 2000） | 🔜 | 工业标准，比欧氏距离更符合人眼；MVP 先欧氏 RGB（颜色合并 P0 前置，依赖 LAB 数据） |
+| **进度识别** | OpenCV.js + 自研算法 | 🔜 | 透视变换 + 颜色对比，无需训练；核心差异化（算法 5） |
+| **AI 抠图** | U2Net / BiRefNet（ONNX Runtime Web） | 🔜 | 浏览器端跑模型，避免服务器成本 |
+| **AI 生图** | SDXL / SiliconFlow API | 🔜 | 开源模型，免费额度可用 |
+| **后端** | Hono（Node.js/Bun） | 🔜 | 轻量、快、类型安全；仅 AI 增强 + 可选持久化 |
+| **数据库** | SQLite → PostgreSQL | 🔜 | 起步轻量，可平滑迁移 |
+| **ORM** | Drizzle ORM | 🔜 | 类型安全，SQL-like API |
+| **对象存储** | Cloudflare R2 / 腾讯云 COS | 🔜 | R2 无出口费用，COS 国内快 |
+| **部署（小程序）** | 微信开发者工具 + 微信平台 | 🔜 | 国内必备 |
+| **协议** | AGPL-3.0 | ✅ | 衍生作品必须开源 |
 
 ## 2. 系统架构
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│              客户端（Taro 多端）                          │
+│              客户端（uni-app 多端）                       │
 │  ┌─────────────────┐  ┌─────────────────┐               │
 │  │   微信小程序     │  │      H5 Web     │               │
 │  └────────┬────────┘  └────────┬────────┘               │
@@ -36,7 +40,7 @@
 │           ▼                     ▼                        │
 │  ┌─────────────────────────────────────────┐             │
 │  │  图片处理引擎（Canvas）                 │             │
-│  │  - 像素化、色号映射、杂色合并、抠图      │             │
+│  │  - 像素化、色号映射、颜色合并、抠图      │             │
 │  │  - 进度识别算法                         │             │
 │  └─────────────────────────────────────────┘             │
 │  ┌─────────────────────────────────────────┐             │
@@ -46,7 +50,7 @@
                        │ HTTP/WS（仅 AI 增强功能）
                        ▼
 ┌──────────────────────────────────────────────────────────┐
-│              服务端（Hono on Bun/Node）                   │
+│        服务端（Hono · 🔜 规划中，当前未启动）             │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐                │
 │  │ AI 生图  │  │ AI 抠图  │  │ 进度识别 │                │
 │  │  SDXL    │  │ U2Net    │  │  算法    │                │
@@ -61,7 +65,7 @@
 
 **能用客户端做的绝不上云** — 省成本、护隐私、响应快。
 
-- 基础图片处理（像素化、色号映射、杂色合并）：100% 客户端
+- 基础图片处理（像素化、色号映射、颜色合并）：100% 客户端
 - AI 抠图：默认客户端（ONNX Runtime Web），可选服务端
 - AI 生图：必须服务端（模型体积大）
 - 进度识别：客户端为主（OpenCV.js）
@@ -220,67 +224,64 @@ ProgressSnapshot（进度快照，P2 用）
 
 ## 5. 目录结构
 
+实际为 **uni-app 单项目**（非 monorepo）。算法放 `src/utils/` 纯 TS（无 DOM / 小程序 API），满足跨端可移植；未来如需独立发包算法，再抽 `src/utils` 为独立包。
+
 ```
 pindou/
 ├── README.md
 ├── LICENSE                           # AGPL-3.0
+├── CLAUDE.md                         # Claude Code 项目指令
+├── package.json                      # 单项目（npm）
+├── vite.config.ts                    # Vite + uni 插件；base 接 PAGES_BASE（CI 注入 /pindou/）
+├── vitest.config.ts                  # 单元测试
+├── tsconfig.json                     # @ → src 别名
+├── index.html                        # H5 入口
 ├── docs/                             # 文档
 │   ├── requirements.md               # 需求文档
-│   ├── technical-roadmap.md          # 技术路线文档（本文件）
+│   ├── technical-roadmap.md          # 技术路线（本文件）
 │   ├── data-sources.md               # 色号数据来源
-│   └── algorithm-notes.md            # 算法笔记
+│   ├── competitive-analysis.md       # 竞品分析（pindou.org）
+│   └── h5-canvas-display.md          # H5 canvas 显示问题诊断
 ├── data/
-│   └── colorSystemMapping.json       # 5 品牌 × 291 色映射
-├── packages/
-│   ├── app/                          # Taro 多端应用
-│   │   ├── src/
-│   │   │   ├── pages/
-│   │   │   │   ├── index/            # 首页
-│   │   │   │   ├── generator/        # 图片转图纸
-│   │   │   │   ├── progress-tracker/ # 进度识别
-│   │   │   │   ├── palette/          # 色号库
-│   │   │   │   └── my-projects/      # 我的项目
-│   │   │   ├── components/
-│   │   │   ├── hooks/
-│   │   │   ├── stores/               # Zustand
-│   │   │   ├── services/             # API 调用
-│   │   │   └── app.config.ts         # Taro 配置
-│   │   ├── project.config.json       # 小程序配置
-│   │   └── package.json
-│   ├── core/                         # 跨端核心逻辑（可独立发包）
-│   │   ├── src/
-│   │   │   ├── image/                # 像素化、色号映射、杂色合并
-│   │   │   ├── color/                # CIEDE2000、LAB 转换
-│   │   │   ├── progress/             # 进度识别算法
-│   │   │   ├── data/                 # 色号数据加载
-│   │   │   └── types/                # 共享类型
-│   │   └── package.json
-│   ├── server/                       # 后端 API
-│   │   ├── src/
-│   │   │   ├── routes/
-│   │   │   ├── ai/                   # AI 服务集成
-│   │   │   ├── db/                   # Drizzle schema
-│   │   │   └── index.ts
-│   │   └── package.json
-│   └── shared/                       # 跨端共享（类型、常量、工具）
-├── pnpm-workspace.yaml
-├── package.json
-└── .gitignore
+│   └── colorSystemMapping.json       # 5 品牌 × 291 色（LAB 待补）
+├── src/
+│   ├── App.vue / main.ts             # 入口
+│   ├── manifest.json                 # uni-app 配置（appid / 各端）
+│   ├── pages.json                    # 页面路由 + navigationStyle
+│   ├── uni.scss                      # 全局 SCSS 变量（色彩 / 圆角 / 阴影）
+│   ├── pages/
+│   │   └── pattern/index.vue         # 图纸生成主页面
+│   ├── components/pattern/           # Toolbar / StatsPanel / ProgressStrip / OrigModal
+│   ├── composables/                  # useCanvas2d / useImageDecode
+│   ├── stores/pattern.ts             # Pinia store
+│   ├── types/pattern.ts              # 共享类型
+│   └── utils/                        # 纯 TS 算法（跨端可移植）
+│       ├── pixelize.ts               # 算法 1 像素化（主导色）
+│       ├── color.ts                  # 算法 2 色号映射（欧氏 → CIEDE2000）
+│       ├── palette.ts                # 色板 / 5 品牌色号
+│       ├── route.ts                  # 推荐拼装路径 + 分区
+│       ├── canvasDraw.ts             # Canvas 绘制（平台胶水层）
+│       └── permissions.ts            # 保存相册权限（MP）
+├── tests/                            # Vitest 单元测试
+├── brand/                            # logo 资产
+├── prototype/                        # 早期 HTML demo（参考实现）
+└── openspec/                         # OpenSpec 规格变更
 ```
 
-### 为什么 Monorepo
+### 为什么单项目（而非 monorepo）
 
-`app` / `core` / `server` / `shared` 共享大量代码（色号、类型、算法），monorepo 能最大化复用，避免重复。`core` 包是纯 TS 实现，完全跨端，未来可独立发包给社区用。
+uni-app 的 Vite 项目天然是单项目结构，`src/utils/` 已是纯 TS（无 DOM / 小程序 API），满足「算法跨端可移植」的核心诉求，无需 monorepo 拆包的额外复杂度。服务端（Hono）尚未启动，待真正需要时再独立为 `packages/server` 或单独仓库，避免过早抽象。
 
 ## 6. 实施阶段（Roadmap）
 
-### Phase 0：项目初始化（1-2 天）
+### Phase 0：项目初始化（1-2 天）✅ 已完成
 
-- [ ] 初始化 monorepo（pnpm workspace）
-- [ ] 创建 4 个 package（app / core / server / shared）
-- [ ] Taro 4 + React + TypeScript + Tailwind 骨架
-- [ ] 导入 5 品牌 × 291 色数据到 `data/colorSystemMapping.json`
-- [ ] 写 README + LICENSE（AGPL-3.0）
+- [x] 初始化 uni-app 4 + Vue 3 + TypeScript + Vite 单项目（npm，非 monorepo）
+- [x] Pinia 状态管理 + SCSS 全局变量（`src/uni.scss`）
+- [x] 导入 5 品牌 × 291 色数据到 `data/colorSystemMapping.json`
+- [x] README + LICENSE（AGPL-3.0）
+- [x] GitHub Pages 自动部署（Actions）
+- [ ] LAB 数据补全（CIEDE2000 / 颜色合并前置）
 
 ### Phase 1：MVP（2-4 周）— 完成 P0 功能
 
@@ -331,7 +332,7 @@ pindou/
 
 | 风险 | 影响 | 应对 |
 |------|------|------|
-| **微信小程序 Canvas API 与 Web 不一致** | 高 | Taro 已做抽象；关键算法放 `core` 包用纯 TS 实现，避开 DOM/小程序差异 |
+| **微信小程序 Canvas API 与 Web 不一致** | 高 | uni-app 条件编译隔离两端；关键算法放 `src/utils` 纯 TS；H5 端用原生 canvas 绕过 uni node-canvas bug（见 [h5-canvas-display.md](./h5-canvas-display.md)） |
 | **AI 模型体积大，小程序包体超限** | 高 | 主包控制在 2MB 内，AI 模型按需加载（分包/插件） |
 | **图片处理性能（大图）** | 中 | 客户端预压缩到 max 1024px，再走算法；必要时上 Web Worker |
 | **色差算法在不同显示器上结果不同** | 中 | 以 sRGB + D65 为标准，不做显示器校准 |
@@ -341,7 +342,7 @@ pindou/
 
 ## 8. 度量与监控
 
-- **前端性能**：Taro 内置 Performance API，记录关键步骤耗时
+- **前端性能**：浏览器 / uni Performance API，记录关键步骤耗时
 - **错误监控**：Sentry（自部署或免费额度）
 - **用户行为**：Umami（开源、隐私友好）替代 GA
 - **AI 调用成本**：每次 API 调用打 tag，月度报表
@@ -350,7 +351,7 @@ pindou/
 
 - [Zippland/perler-beads](https://github.com/Zippland/perler-beads) — 核心算法参考（AGPL-3.0）
 - [pindou.org](https://pindou.org/) — 竞品参考（颜色合并 / 画笔编辑 / 色号高亮），分析见 [competitive-analysis.md](./competitive-analysis.md)
-- [Taro 官方文档](https://taro-docs.jd.com/)
+- [uni-app 官方文档](https://uniapp.dcloud.net.cn/)
 - [CIEDE2000 论文](https://en.wikipedia.org/wiki/Color_difference#CIEDE2000)
 - [U2Net 抠图模型](https://github.com/xuebinqin/U-2-Net)
 - [ONNX Runtime Web](https://onnxruntime.ai/docs/tutorials/web/)
