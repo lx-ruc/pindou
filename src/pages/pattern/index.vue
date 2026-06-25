@@ -379,6 +379,9 @@ async function onExport(): Promise<void> {
     const dpr = uni.getSystemInfoSync().pixelRatio
     canvas.width = Math.floor(W * dpr)
     canvas.height = Math.floor(H * dpr)
+    // 显式设 CSS 尺寸 = W × H（CSS px），避免 Safari 在 CSS size 远小于 buffer 时 toDataURL 截断
+    canvas.style.width = W + 'px'
+    canvas.style.height = H + 'px'
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, W, H)
