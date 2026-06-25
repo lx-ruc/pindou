@@ -517,6 +517,23 @@ watch(() => store.placed, () => {
             <text class="small">上传照片生成像素图</text>
           </view>
         </view>
+
+        <view class="legend-bottom" v-if="hasPattern">
+          <view class="legend-bottom-title">色号 → 数量（{{ store.sortedItems.length }} 色）</view>
+          <scroll-view scroll-x class="legend-scroll-x" show-scrollbar="false">
+            <view class="legend-row">
+              <view
+                v-for="[hex, n] in store.sortedItems"
+                :key="hex"
+                class="bead-chip"
+              >
+                <view class="bead-swatch" :style="{ background: hex }" />
+                <text class="bead-code">{{ BRAND_CODES[store.brand][hex] }}</text>
+                <text class="bead-count">×{{ n }}</text>
+              </view>
+            </view>
+          </scroll-view>
+        </view>
       </view>
 
       <view class="sidebar">
@@ -543,23 +560,6 @@ watch(() => store.placed, () => {
           </view>
         </view>
       </view>
-    </view>
-
-    <view class="legend-bottom" v-if="hasPattern">
-      <view class="legend-bottom-title">色号 → 数量（{{ store.sortedItems.length }} 色）</view>
-      <scroll-view scroll-x class="legend-scroll-x" show-scrollbar="false">
-        <view class="legend-row">
-          <view
-            v-for="[hex, n] in store.sortedItems"
-            :key="hex"
-            class="bead-chip"
-          >
-            <view class="bead-swatch" :style="{ background: hex }" />
-            <text class="bead-code">{{ BRAND_CODES[store.brand][hex] }}</text>
-            <text class="bead-count">×{{ n }}</text>
-          </view>
-        </view>
-      </scroll-view>
     </view>
 
     <OrigModal :show="showOrig" :src="store.origTempFilePath" @close="showOrig = false" />
@@ -664,7 +664,7 @@ watch(() => store.placed, () => {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 @media (min-width: 900px) {
   .layout { flex-direction: row; }
@@ -688,8 +688,8 @@ watch(() => store.placed, () => {
   border: $border;
   border-radius: $radius;
   box-shadow: $shadow;
-  padding: 10px 14px;
-  margin-top: 12px;
+  padding: 8px 12px;
+  margin-top: 10px;
 }
 .legend-bottom-title {
   font-size: 12px;
@@ -739,7 +739,7 @@ watch(() => store.placed, () => {
   border: $border;
   border-radius: $radius;
   box-shadow: $shadow;
-  padding: 10px;
+  padding: 14px;
 }
 .guide-card .group-title {
   font-size: 13px;
@@ -753,7 +753,7 @@ watch(() => store.placed, () => {
 .guide-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 7px;
 }
 .guide-item {
   display: flex;

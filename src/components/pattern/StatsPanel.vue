@@ -40,14 +40,14 @@ const store = usePatternStore()
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 .card {
   background: $surface;
   border: $border;
   border-radius: $radius;
   box-shadow: $shadow;
-  padding: 11px;
+  padding: 14px;
   width: 100%;
   box-sizing: border-box;
 }
@@ -62,7 +62,7 @@ const store = usePatternStore()
   color: $ink-soft;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  margin: 0 0 7px;
+  margin: 0 0 9px;
   text-align: center;
 }
 .opt-row {
