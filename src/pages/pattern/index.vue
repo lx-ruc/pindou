@@ -634,7 +634,8 @@ watch(() => store.placed, () => {
 @media (min-width: 900px) {
   .layout { flex-direction: row; }
   .canvas-card { flex: 1 1 auto; min-width: 0; }
-  .sidebar { flex: 0 0 280px; width: 280px; }
+  /* sidebar 下移 canvas-card 的 border(3)+padding-top(12)=15px，让工具栏顶部与画布顶部齐平 */
+  .sidebar { flex: 0 0 280px; width: 280px; padding-top: 15px; box-sizing: border-box; }
   .sidebar :deep(.toolbar) { flex-direction: column; align-items: stretch; padding: 0; gap: 12px; }
   .sidebar :deep(.tool-label) { margin-bottom: -6px; }
   .sidebar :deep(.mode-toggle),
