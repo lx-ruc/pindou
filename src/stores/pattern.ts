@@ -5,6 +5,7 @@ import { DEFAULT_BRAND } from '@/utils/palette'
 import { pixelize } from '@/utils/pixelize'
 import { computeCounts, computeRoute, findNextUnplaced } from '@/utils/route'
 import { mergePalette, mergeSpatial } from '@/utils/colorMerge'
+import type { Snapshot } from '@/utils/persist'
 
 export const usePatternStore = defineStore('pattern', () => {
   // 源图像 —— shallowRef 避免 Vue 对 typed array 做 reactive proxy（否则 pixelize 下标访问卡死）
@@ -197,6 +198,52 @@ export const usePatternStore = defineStore('pattern', () => {
     recompute()
   }
 
+  /**
+   * 应用恢复的快照：直接写参数/几何/图纸/进度，进入 ghost 态
+   * （srcData=null → 调参/原图/重新生成需重传图；track 记进度不受影响）。
+   * 不调 recompute（它依赖 srcData），改为就地重算派生 sortedItems/routeOrder。
+   */
+  function applyRestored(snap: {
+    params: Snapshot['params']
+    rows: number
+    cols: number
+    srcW: number
+    srcH: number
+    imgAspect: number
+    hexGrid: Hex[][]
+    placed: boolean[][]
+  }): void {
+    const p = snap.params
+    brand.value = p.brand
+    mode.value = p.mode
+    size.value = p.size
+    zoom.value = p.zoom
+    showZones.value = p.showZones
+    showCodes.value = p.showCodes
+    guide.value = p.guide
+    mergeEnabled.value = p.mergeEnabled
+    mergeMode.value = p.mergeMode
+    spatialThreshold.value = p.spatialThreshold
+    paletteMaxColors.value = p.paletteMaxColors
+    paletteMinCount.value = p.paletteMinCount
+    paletteThreshold.value = p.paletteThreshold
+    rows.value = snap.rows
+    cols.value = snap.cols
+    srcW.value = snap.srcW
+    srcH.value = snap.srcH
+    imgAspect.value = snap.imgAspect
+    // immutable 拷贝（外部快照数组不再被引用）
+    const hg = snap.hexGrid.map((row) => row.slice())
+    const pl = snap.placed.map((row) => row.slice())
+    hexGrid.value = hg
+    placed.value = pl
+    srcData.value = null
+    origTempFilePath.value = ''
+    const items = computeCounts(hg)
+    sortedItems.value = items
+    routeOrder.value = computeRoute(hg, snap.rows, snap.cols, items)
+  }
+
   return {
     srcData,
     srcW,
@@ -241,5 +288,6 @@ export const usePatternStore = defineStore('pattern', () => {
     setPaletteMaxColors,
     setPaletteMinCount,
     setPaletteThreshold,
+    applyRestored,
   }
 })

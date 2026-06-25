@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app'
+import { usePatternStore } from '@/stores/pattern'
+import { getKV } from '@/utils/storage'
+import { SNAPSHOT_KEY, deserialize, applySnapshot } from '@/utils/persist'
 
 onLaunch(() => {
-  console.log('拼豆智能助手 App Launch')
+  // 恢复上次会话的图纸 + 进度 + 参数（单项目，不存原图 → 进入 ghost 态）
+  const store = usePatternStore()
+  const raw = getKV(SNAPSHOT_KEY)
+  if (!raw) return
+  const snap = deserialize(raw)
+  if (!snap) return
+  applySnapshot(store, snap)
 })
 </script>
 

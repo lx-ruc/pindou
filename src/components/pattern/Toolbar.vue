@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { usePatternStore } from '@/stores/pattern'
 
 const emit = defineEmits<{ (e: 'viewOrig'): void; (e: 'export'): void; (e: 'pick'): void }>()
@@ -6,6 +7,9 @@ const emit = defineEmits<{ (e: 'viewOrig'): void; (e: 'export'): void; (e: 'pick
 const store = usePatternStore()
 
 const SIZES = [29, 50, 80, 100]
+
+// ghost 态：已恢复历史图纸但原图未存（srcData=null），调参/原图需重传图
+const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
 </script>
 
 <template>
@@ -23,8 +27,9 @@ const SIZES = [29, 50, 80, 100]
       >进度</view>
     </view>
 
-    <view class="tool-label" v-if="store.mode === 'view'">尺寸</view>
-    <view class="seg" v-if="store.mode === 'view'">
+    <view class="tool-label ghost-hint" v-if="store.mode === 'view' && ghost">已恢复历史图纸 · 重新上传图后可调参</view>
+    <view class="tool-label" v-if="store.mode === 'view' && !ghost">尺寸</view>
+    <view class="seg" v-if="store.mode === 'view' && !ghost">
       <view
         v-for="s in SIZES"
         :key="s"
@@ -104,13 +109,13 @@ const SIZES = [29, 50, 80, 100]
       <view class="btn ghost" @tap="emit('viewOrig')" v-if="store.origTempFilePath">
         <text>原图</text>
       </view>
-      <view class="btn" @tap="emit('export')" v-if="store.srcData">
+      <view class="btn" @tap="emit('export')" v-if="store.hexGrid.length > 0">
         <text>导出 PNG</text>
       </view>
     </view>
 
     <view class="btn pick" @tap="emit('pick')">
-      <text>{{ store.srcData ? '换图片' : '选择图片' }}</text>
+      <text>{{ store.srcData ? '换图片' : (ghost ? '重新上传图' : '选择图片') }}</text>
     </view>
   </view>
 </template>
@@ -164,6 +169,10 @@ const SIZES = [29, 50, 80, 100]
   font-size: 12.5px;
   color: $ink-soft;
   margin-right: 2px;
+}
+.ghost-hint {
+  color: $orange;
+  font-weight: 700;
 }
 .zoom-slider {
   width: 110px;

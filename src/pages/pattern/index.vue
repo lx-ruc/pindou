@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, getCurrentInstance, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, getCurrentInstance, onMounted, onUnmounted, nextTick } from 'vue'
 import { usePatternStore } from '@/stores/pattern'
 import { BRAND_CODES } from '@/utils/palette'
 import type { Brand } from '@/types/pattern'
@@ -12,6 +12,7 @@ import Toolbar from '@/components/pattern/Toolbar.vue'
 import ProgressStrip from '@/components/pattern/ProgressStrip.vue'
 import StatsPanel from '@/components/pattern/StatsPanel.vue'
 import OrigModal from '@/components/pattern/OrigModal.vue'
+import { installPersist } from '@/utils/persist'
 
 const store = usePatternStore()
 const instance = getCurrentInstance()
@@ -32,6 +33,9 @@ const imageRef = ref<any>(null)
 // 格子仍保持正方形：bp=min(W/cols,H/rows)，grid 居中绘制，米黄底填满整个 canvas-card
 const canvasCardStyle = computed(() => '')
 const canvasScrollStyle = computed(() => '')
+
+// 有图纸可交互（原图在 或 已恢复历史图纸 ghost 态）；替代到处判 store.srcData
+const hasPattern = computed(() => store.hexGrid.length > 0)
 
 // 视图状态：pan 偏移（CSS px，相对 canvas 左上）+ zoom 倍数
 // zoom > 1 时 grid 比 canvas 大，超出的部分被 overflow:hidden 裁掉，用户拖动 pan 查看不同区域
@@ -131,7 +135,7 @@ function dumpCanvasStats(canvas: any, ctx: any, w: number, h: number): void {
 }
 
 function render(): void {
-  if (!store.srcData || store.rows === 0 || store.cols === 0) return
+  if (!hasPattern.value || store.rows === 0 || store.cols === 0) return
   if (!canvasNode) return
 
   // 拿 image 的 boundingClientRect（= canvas buffer 应该的尺寸，和外框边缘对齐）
@@ -159,7 +163,7 @@ function render(): void {
 }
 
 function drawPattern(cw: number, ch: number): void {
-  if (!canvasNode || !store.srcData) return
+  if (!canvasNode || !hasPattern.value) return
   const canvas = canvasNode
   const dpr = canvasDpr
 
@@ -224,6 +228,18 @@ function drawPattern(cw: number, ch: number): void {
 }
 
 async function pickImage(): Promise<void> {
+  // ghost 态（已恢复历史图纸 + 有进度）下重新上传会清空进度，二次确认
+  if (!store.srcData && store.placed.some((row) => row?.some(Boolean))) {
+    const ok = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '重新上传',
+        content: '重新上传将清空当前拼豆进度，是否继续？',
+        success: (res) => resolve(!!res.confirm),
+        fail: () => resolve(false),
+      })
+    })
+    if (!ok) return
+  }
   try {
     const picked = await pickAndDecodeImage()
     if (picked) {
@@ -245,7 +261,7 @@ function onCanvasTap(e: any): void {
   }
   // #endif
   // 选图入口已移到工具栏按钮，canvas-scroll 点击只在进度模式下标记格子
-  if (!store.srcData || store.mode !== 'track') return
+  if (!hasPattern.value || store.mode !== 'track') return
   // 进度模式：点击 = 标记/取消已拼
   const rawX = e.detail?.x ?? e.clientX ?? e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX
   const rawY = e.detail?.y ?? e.clientY ?? e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY
@@ -286,7 +302,7 @@ let dragStartPanX = 0
 let dragStartPanY = 0
 
 function onWheel(e: WheelEvent): void {
-  if (!store.srcData) return
+  if (!hasPattern.value) return
   const dy = e.deltaY || 0
   if (dy === 0) return
   const step = dy > 0 ? -0.1 : 0.1
@@ -297,7 +313,7 @@ function onWheel(e: WheelEvent): void {
 }
 
 function onMouseDown(e: MouseEvent): void {
-  if (!store.srcData) return
+  if (!hasPattern.value) return
   // 只在 zoom > 1（grid 比 canvas 大）时才允许拖动；zoom <= 1 拖动会让像素图偏离中心
   if (store.zoom <= 1.01) return
   dragging = true
@@ -329,7 +345,7 @@ function onMouseUp(): void {
 // #endif
 
 async function onExport(): Promise<void> {
-  if (exporting.value || !store.srcData) return
+  if (exporting.value || !hasPattern.value) return
   exporting.value = true
   uni.showLoading({ title: '导出中…', mask: true })
   try {
@@ -402,6 +418,8 @@ async function onExport(): Promise<void> {
   }
 }
 
+let disposePersist: (() => void) | null = null
+
 onMounted(() => {
   nextTick(() => {
     setTimeout(() => {
@@ -422,6 +440,14 @@ onMounted(() => {
     window.addEventListener('mouseup', onMouseUp as EventListener)
   }, 100)
   // #endif
+  disposePersist = installPersist(store)
+})
+
+onUnmounted(() => {
+  if (disposePersist) {
+    disposePersist()
+    disposePersist = null
+  }
 })
 
 // watch UI 状态变化触发 render（primitive sources，不 deep walk typed array）
@@ -486,7 +512,7 @@ watch(() => store.placed, () => {
           />
           <canvas :id="canvasId" type="2d" class="pattern-canvas" />
           <!-- #endif -->
-          <view v-if="!store.srcData && !patternImageSrc" class="pick-prompt">
+          <view v-if="!hasPattern && !patternImageSrc" class="pick-prompt">
             <text class="big">点右侧「选择图片」按钮</text>
             <text class="small">上传照片生成像素图</text>
           </view>
@@ -519,7 +545,7 @@ watch(() => store.placed, () => {
       </view>
     </view>
 
-    <view class="legend-bottom" v-if="store.srcData">
+    <view class="legend-bottom" v-if="hasPattern">
       <view class="legend-bottom-title">色号 → 数量（{{ store.sortedItems.length }} 色）</view>
       <scroll-view scroll-x class="legend-scroll-x" show-scrollbar="false">
         <view class="legend-row">
