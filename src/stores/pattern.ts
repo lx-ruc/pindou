@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, shallowRef, triggerRef, computed } from 'vue'
-import type { Brand, Cell, Hex, ImagePixels, Mode, PickedImage, Progress } from '@/types/pattern'
+import type { Brand, Cell, Hex, ImagePixels, MergeMode, Mode, PickedImage, Progress } from '@/types/pattern'
 import { DEFAULT_BRAND } from '@/utils/palette'
 import { pixelize } from '@/utils/pixelize'
 import { computeCounts, computeRoute, findNextUnplaced } from '@/utils/route'
+import { mergePalette, mergeSpatial } from '@/utils/colorMerge'
 
 export const usePatternStore = defineStore('pattern', () => {
   // 源图像 —— shallowRef 避免 Vue 对 typed array 做 reactive proxy（否则 pixelize 下标访问卡死）
@@ -21,6 +22,14 @@ export const usePatternStore = defineStore('pattern', () => {
   const showZones = ref(true)
   const showCodes = ref(true)
   const guide = ref(true)
+
+  // 颜色合并（P0 生成质量：清杂色 / 减色号 / 降备料成本）
+  const mergeEnabled = ref(true)
+  const mergeMode = ref<MergeMode>('palette')
+  const spatialThreshold = ref(10)
+  const paletteMaxColors = ref(0) // 0 = 不限
+  const paletteMinCount = ref(3)
+  const paletteThreshold = ref(12)
 
   // 计算结果 —— 全用 shallowRef（避免对大数组做 deep reactive）
   const rows = ref(0)
@@ -79,8 +88,20 @@ export const usePatternStore = defineStore('pattern', () => {
       width: srcW.value,
       height: srcH.value,
     }
-    const { rows: r, cols: c, hexGrid: hg } = pixelize(src, size.value, imgAspect.value)
+    const { rows: r, cols: c, hexGrid: hg0 } = pixelize(src, size.value, imgAspect.value)
     _log('after pixelize')
+    // 颜色合并：pixelize 出 hg0 → 合并得 hg，下游 computeCounts/computeRoute/placed 全部基于 hg
+    let hg: Hex[][] = hg0
+    if (mergeEnabled.value) {
+      hg = mergeMode.value === 'spatial'
+        ? mergeSpatial(hg0, r, c, { threshold: spatialThreshold.value })
+        : mergePalette(hg0, {
+            maxColors: paletteMaxColors.value || undefined,
+            minCount: paletteMinCount.value,
+            threshold: paletteThreshold.value,
+          })
+      _log('after merge')
+    }
     rows.value = r
     cols.value = c
     hexGrid.value = hg
@@ -145,6 +166,37 @@ export const usePatternStore = defineStore('pattern', () => {
     guide.value = !guide.value
   }
 
+  function setMergeEnabled(v: boolean): void {
+    if (v === mergeEnabled.value) return
+    mergeEnabled.value = v
+    recompute()
+  }
+  function setMergeMode(m: MergeMode): void {
+    if (m === mergeMode.value) return
+    mergeMode.value = m
+    recompute()
+  }
+  function setSpatialThreshold(v: number): void {
+    if (v === spatialThreshold.value) return
+    spatialThreshold.value = v
+    recompute()
+  }
+  function setPaletteMaxColors(v: number): void {
+    if (v === paletteMaxColors.value) return
+    paletteMaxColors.value = v
+    recompute()
+  }
+  function setPaletteMinCount(v: number): void {
+    if (v === paletteMinCount.value) return
+    paletteMinCount.value = v
+    recompute()
+  }
+  function setPaletteThreshold(v: number): void {
+    if (v === paletteThreshold.value) return
+    paletteThreshold.value = v
+    recompute()
+  }
+
   return {
     srcData,
     srcW,
@@ -158,6 +210,12 @@ export const usePatternStore = defineStore('pattern', () => {
     showZones,
     showCodes,
     guide,
+    mergeEnabled,
+    mergeMode,
+    spatialThreshold,
+    paletteMaxColors,
+    paletteMinCount,
+    paletteThreshold,
     rows,
     cols,
     hexGrid,
@@ -177,5 +235,11 @@ export const usePatternStore = defineStore('pattern', () => {
     toggleZones,
     toggleCodes,
     toggleGuide,
+    setMergeEnabled,
+    setMergeMode,
+    setSpatialThreshold,
+    setPaletteMaxColors,
+    setPaletteMinCount,
+    setPaletteThreshold,
   }
 })

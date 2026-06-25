@@ -24,3 +24,16 @@ export interface Progress {
   next: Cell | null
   nextIdx: number
 }
+
+/** 颜色合并模式：spatial=空间BFS去孤立噪点，palette=全局色号归并/限N色 */
+export type MergeMode = 'spatial' | 'palette'
+
+/** 颜色合并配置（对应 store 的合并参数） */
+export interface MergeConfig {
+  enabled: boolean
+  mode: MergeMode
+  spatialThreshold: number
+  paletteMaxColors: number
+  paletteMinCount: number
+  paletteThreshold: number
+}

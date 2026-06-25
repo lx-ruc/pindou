@@ -436,6 +436,12 @@ watch(() => store.zoom, (z) => {
 watch(() => store.showZones, () => nextTick(() => render()))
 watch(() => store.showCodes, () => nextTick(() => render()))
 watch(() => store.guide, () => nextTick(() => render()))
+watch(() => store.mergeEnabled, () => nextTick(() => render()))
+watch(() => store.mergeMode, () => nextTick(() => render()))
+watch(() => store.spatialThreshold, () => nextTick(() => render()))
+watch(() => store.paletteMaxColors, () => nextTick(() => render()))
+watch(() => store.paletteMinCount, () => nextTick(() => render()))
+watch(() => store.paletteThreshold, () => nextTick(() => render()))
 // placed 用 shallowRef + triggerRef，watch 引用变化（triggerRef 触发）
 watch(() => store.placed, () => {
   if (store.mode === 'track') nextTick(() => render())
