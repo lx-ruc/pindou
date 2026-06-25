@@ -28,14 +28,9 @@ const imageRef = ref<any>(null)
 // canvas-scroll 用 aspect-ratio 让宽高比 = grid 比例（cols:rows）；
 // max-height + 对应的 max-width 保证宽屏下 canvas-scroll 是正方形（grid 填满，无两侧留白）
 // canvas-card 本身保持 grid 比例（接近正方形），canvas-scroll 占满 canvas-card
-// canvas-card 用 aspect-ratio + max-height 让它的高度 = layout 高度，width 按比例算
-// 没选图时默认 1:1 正方形（避免画布压扁）
-const canvasCardStyle = computed(() => {
-  if (!store.srcData || store.cols === 0 || store.rows === 0) {
-    return 'aspect-ratio: 1 / 1; max-height: 100%; margin: 0 auto'
-  }
-  return `aspect-ratio: ${store.cols} / ${store.rows}; max-height: 100%; margin: 0 auto`
-})
+// canvas-card 靠 flex 撑满 layout 剩余宽度，跟随浏览器宽度变宽/变窄（不再用 aspect-ratio 锁宽）
+// 格子仍保持正方形：bp=min(W/cols,H/rows)，grid 居中绘制，米黄底填满整个 canvas-card
+const canvasCardStyle = computed(() => '')
 const canvasScrollStyle = computed(() => '')
 
 // 视图状态：pan 偏移（CSS px，相对 canvas 左上）+ zoom 倍数
@@ -635,8 +630,8 @@ watch(() => store.placed, () => {
   gap: 14px;
 }
 @media (min-width: 900px) {
-  .layout { flex-direction: row; justify-content: center; }
-  .canvas-card { flex: 0 1 auto; min-width: 0; }
+  .layout { flex-direction: row; }
+  .canvas-card { flex: 1 1 auto; min-width: 0; }
   .sidebar { flex: 0 0 280px; width: 280px; }
   .sidebar :deep(.toolbar) { flex-direction: column; align-items: stretch; padding: 0; gap: 12px; }
   .sidebar :deep(.tool-label) { margin-bottom: -6px; }
