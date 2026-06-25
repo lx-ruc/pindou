@@ -664,13 +664,14 @@ watch(() => store.placed, () => {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 @media (min-width: 900px) {
   .layout { flex-direction: row; }
   .canvas-card { flex: 1 1 auto; min-width: 0; }
-  /* sidebar 下移 canvas-card 的 border(3)+padding-top(12)=15px，让工具栏顶部与画布顶部齐平 */
-  .sidebar { flex: 0 0 280px; width: 280px; padding-top: 15px; box-sizing: border-box; }
+  /* sidebar 顶部对齐画布顶边黑框；overflow-y:auto 兜底，内容多时内部滚动，
+     底边恒与画布底边对齐、绝不溢出到画布以下 */
+  .sidebar { flex: 0 0 280px; width: 280px; min-height: 0; overflow-y: auto; box-sizing: border-box; }
   .sidebar :deep(.toolbar) { flex-direction: column; align-items: stretch; padding: 0; gap: 12px; }
   .sidebar :deep(.tool-label) { margin-bottom: -6px; }
   .sidebar :deep(.mode-toggle),
@@ -738,7 +739,7 @@ watch(() => store.placed, () => {
   border: $border;
   border-radius: $radius;
   box-shadow: $shadow;
-  padding: 14px;
+  padding: 10px;
 }
 .guide-card .group-title {
   font-size: 13px;
@@ -752,7 +753,7 @@ watch(() => store.placed, () => {
 .guide-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 4px;
 }
 .guide-item {
   display: flex;
