@@ -8,6 +8,7 @@ const BRANDS: Brand[] = ['MARD', 'COCO', '漫漫', '盼盼', '咪小窝']
 import { drawGrid, drawProgressOverlay, drawComposed } from '@/utils/canvasDraw'
 import { saveImageToAlbum } from '@/utils/permissions'
 import { pickAndDecodeImage } from '@/composables/useImageDecode'
+import { patternToHTML, patternToSVG } from '@/utils/exportHTML'
 import Toolbar from '@/components/pattern/Toolbar.vue'
 import ProgressStrip from '@/components/pattern/ProgressStrip.vue'
 import StatsPanel from '@/components/pattern/StatsPanel.vue'
@@ -387,34 +388,33 @@ async function onExport(): Promise<void> {
     ctx.clearRect(0, 0, W, H)
     drawComposed(ctx, store.hexGrid, store.rows, store.cols, store.sortedItems, store.brand, bp)
 
-    // H5 vs mp-weixin：mp 用 canvas.toTempFilePath + saveImageToPhotosAlbum；
-    // H5 用 canvas.toDataURL + <a download> 触发浏览器下载
-    if (typeof canvas.toTempFilePath === 'function') {
-      const tempFilePath: string = await new Promise((resolve, reject) => {
-        canvas.toTempFilePath({
-          x: 0,
-          y: 0,
-          width: canvas.width,
-          height: canvas.height,
-          destWidth: canvas.width,
-          destHeight: canvas.height,
-          fileType: 'png',
-          success: (r: any) => resolve(r.tempFilePath),
-          fail: (e: any) => reject(e),
-        })
-      })
-      await saveImageToAlbum(tempFilePath)
-    } else {
-      // H5：toDataURL + <a download>
-      const dataUrl = canvas.toDataURL('image/png')
-      const a = document.createElement('a')
-      a.href = dataUrl
-      a.download = `pindou-pattern-${store.cols}x${store.rows}-${store.brand}.png`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      uni.showToast({ title: '已下载', icon: 'success' })
-    }
+    // 用 SVG（自包含 rect/text）→ Image → canvas → PNG，绕开 canvas drawComposed 的潜在问题
+    const { svg, width: sW, height: sH } = patternToSVG(store.hexGrid, store.rows, store.cols, store.sortedItems, store.brand)
+    const dpr2 = 2
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        const c = document.createElement('canvas')
+        c.width = sW * dpr2
+        c.height = sH * dpr2
+        const cx = c.getContext('2d')!
+        cx.drawImage(img, 0, 0, sW * dpr2, sH * dpr2)
+        try {
+          resolve(c.toDataURL('image/png'))
+        } catch (e) {
+          reject(e)
+        }
+      }
+      img.onerror = (e) => reject(e)
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+    })
+    const a = document.createElement('a')
+    a.href = dataUrl
+    a.download = `pindou-pattern-${store.cols}x${store.rows}-${store.brand}.png`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    uni.showToast({ title: 'PNG 已下载', icon: 'success' })
   } catch (e) {
     console.error('export failed', e)
     uni.showToast({ title: '导出失败', icon: 'none' })
