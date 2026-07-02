@@ -56,6 +56,7 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
       <view class="zoom-pct">{{ sizeDisplay }}</view>
     </view>
 
+    <!-- #ifdef H5 -->
     <view class="tool-label">缩放</view>
     <view class="zoom-row">
       <view class="zoom-btn" @tap="store.setZoom(Math.max(0.5, +(store.zoom - 0.1).toFixed(2)))">−</view>
@@ -73,6 +74,7 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
       <view class="zoom-btn" @tap="store.setZoom(Math.min(2.6, +(store.zoom + 0.1).toFixed(2)))">+</view>
       <view class="zoom-pct">{{ Math.round(store.zoom * 100) }}%</view>
     </view>
+    <!-- #endif -->
 
     <view class="tool-label" v-if="store.srcData">颜色合并</view>
     <view class="merge-block" v-if="store.srcData">

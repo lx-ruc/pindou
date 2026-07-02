@@ -21,6 +21,38 @@ const instance = getCurrentInstance()
 const canvasId = 'patternCanvas'
 const exportCanvasId = 'exportCanvas'
 const showOrig = ref(false)
+
+// 小程序自定义导航栏：留出状态栏 + 胶囊按钮高度；H5 端沿用 page 默认 12px padding
+const navPadTop = ref(12)
+// #ifdef MP-WEIXIN
+;(function initNavPad() {
+  try {
+    const sys = uni.getSystemInfoSync()
+    const sb = sys.statusBarHeight || 0
+    const menu = (uni as any).getMenuButtonBoundingClientRect?.()
+    if (menu && menu.height) {
+      // 胶囊在 navbar 中垂直居中：navbar.bottom = menu.top + menu.bottom - statusBarHeight
+      const navBarBottom = menu.top + menu.bottom - sb
+      navPadTop.value = navBarBottom + 8
+    } else {
+      navPadTop.value = sb + 52
+    }
+  } catch {
+    navPadTop.value = 64
+  }
+})()
+// #endif
+
+// mp-weixin 主屏只显示画布 + 两按钮 + 顶部品牌切换
+const isMpWeixin = ref(false)
+// #ifdef MP-WEIXIN
+isMpWeixin.value = true
+// #endif
+const showBrandMenu = ref(false)
+function selectBrand(b: Brand): void {
+  store.setBrand(b)
+  showBrandMenu.value = false
+}
 const exporting = ref(false)
 // canvas 导出的 PNG 路径，给 <image> 显示（绕过 mp-weixin canvas 显示层 bug）
 const patternImageSrc = ref('')
@@ -32,11 +64,21 @@ const imageRef = ref<any>(null)
 // canvas-card 本身保持 grid 比例（接近正方形），canvas-scroll 占满 canvas-card
 // canvas-card 靠 flex 撑满 layout 剩余宽度，跟随浏览器宽度变宽/变窄（不再用 aspect-ratio 锁宽）
 // 格子仍保持正方形：bp=min(W/cols,H/rows)，grid 居中绘制，米黄底填满整个 canvas-card
-const canvasCardStyle = computed(() => '')
+const canvasCardStyle = computed(() => isMpWeixin.value ? 'flex: 1 1 0; min-height: 0;' : '')
 const canvasScrollStyle = computed(() => '')
 
 // 有图纸可交互（原图在 或 已恢复历史图纸 ghost 态）；替代到处判 store.srcData
 const hasPattern = computed(() => store.hexGrid.length > 0)
+// ghost 态：已恢复历史图纸但原图未存（srcData=null），文案需要表达"重新上传图"
+const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
+// 尺寸显示：按图片宽高比换算成 cols×rows（拼豆板实际格子数）
+const sizeDisplay = computed(() => {
+  const aspect = store.imgAspect
+  if (!aspect || aspect === 1) return `${store.size}×${store.size}`
+  const long = store.size
+  const short = Math.max(1, Math.round(long * Math.min(aspect, 1 / aspect)))
+  return aspect >= 1 ? `${long}×${short}` : `${short}×${long}`
+})
 
 // 视图状态：pan 偏移（CSS px，相对 canvas 左上）+ zoom 倍数
 // zoom > 1 时 grid 比 canvas 大，超出的部分被 overflow:hidden 裁掉，用户拖动 pan 查看不同区域
@@ -136,8 +178,19 @@ function dumpCanvasStats(canvas: any, ctx: any, w: number, h: number): void {
 }
 
 function render(): void {
+  console.log('[render] enter', {
+    hasPattern: hasPattern.value,
+    rows: store.rows,
+    cols: store.cols,
+    hasCanvasNode: !!canvasNode,
+  })
   if (!hasPattern.value || store.rows === 0 || store.cols === 0) return
-  if (!canvasNode) return
+  // canvasNode 缺失（onMounted 时 canvas 还没就绪）→ 兜底重新 fetchCanvasNode 再 render
+  if (!canvasNode) {
+    console.warn('[render] canvasNode missing, refetching...')
+    fetchCanvasNode().then(() => render())
+    return
+  }
 
   // 拿 image 的 boundingClientRect（= canvas buffer 应该的尺寸，和外框边缘对齐）
   // 第一次 render 时 image 可能还没显示（patternImageSrc 空），fallback 到 canvas-scroll 内容区
@@ -154,7 +207,11 @@ function render(): void {
         .in(instance)
         .select('.canvas-scroll')
         .boundingClientRect((scrollRect: any) => {
-          if (!scrollRect) return
+          if (!scrollRect) {
+            console.warn('[render] scrollRect missing')
+            return
+          }
+          console.log('[render] use canvas-scroll size', scrollRect.width, scrollRect.height)
           // scrollRect 是外框尺寸（含 border 3px），内容区 = 外框 - 2*border
           drawPattern(scrollRect.width - 6, scrollRect.height - 6)
         })
@@ -177,9 +234,14 @@ function drawPattern(cw: number, ch: number): void {
 
   canvas.width = Math.floor(cw * dpr)
   canvas.height = Math.floor(ch * dpr)
-  // 关键：buffer 尺寸改了后必须显式设 CSS 显示尺寸，否则 dpr>1 时 canvas 会按 buffer 尺寸显示（撑大溢出 canvas-scroll）
-  canvas.style.width = cw + 'px'
-  canvas.style.height = ch + 'px'
+  // #ifdef H5
+  // 关键：H5 buffer 尺寸改了后必须显式设 CSS 显示尺寸，否则 dpr>1 时 canvas 会按 buffer 尺寸显示（撑大溢出 canvas-scroll）
+  // mp-weixin canvas node 没有 style 属性，离屏 canvas 显示靠 toTempFilePath → <image>
+  if (canvas.style) {
+    canvas.style.width = cw + 'px'
+    canvas.style.height = ch + 'px'
+  }
+  // #endif
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.scale(dpr, dpr)
@@ -212,18 +274,31 @@ function drawPattern(cw: number, ch: number): void {
 
   // #ifndef H5
   // MP：canvas 离屏，导出整张 buffer PNG 给 <image> 显示（绕过 canvas 显示层 bug）
+  // 优先 canvas.toTempFilePath（canvas 2d node 方法），不可用时 fallback 到 uni.canvasToTempFilePath（旧 API）
+  const exportOpts = {
+    x: 0,
+    y: 0,
+    width: canvas.width,
+    height: canvas.height,
+    destWidth: canvas.width,
+    destHeight: canvas.height,
+    fileType: 'png' as const,
+    success: (r: any) => {
+      console.log('[render] export OK', r.tempFilePath)
+      patternImageSrc.value = r.tempFilePath
+    },
+    fail: (e: any) => { console.error('[render] export failed', e) },
+  }
+  console.log('[drawPattern] mp-weixin export start', {
+    canvasW: canvas.width,
+    canvasH: canvas.height,
+    hasFn: typeof canvas.toTempFilePath,
+  })
   if (typeof canvas.toTempFilePath === 'function') {
-    canvas.toTempFilePath({
-      x: 0,
-      y: 0,
-      width: canvas.width,
-      height: canvas.height,
-      destWidth: canvas.width,
-      destHeight: canvas.height,
-      fileType: 'png',
-      success: (r: any) => { patternImageSrc.value = r.tempFilePath },
-      fail: (e: any) => { console.error('[render] toTempFilePath failed', e) },
-    })
+    canvas.toTempFilePath(exportOpts)
+  } else {
+    // @ts-ignore uni.canvasToTempFilePath 兼容老 API（部分版本 canvas node 没有 toTempFilePath）
+    uni.canvasToTempFilePath({ ...exportOpts, canvas }, instance?.proxy)
   }
   // #endif
   // H5：原生 canvas 直接显示，无需导出
@@ -248,6 +323,11 @@ async function pickImage(): Promise<void> {
     const picked = await pickAndDecodeImage()
     if (picked) {
       store.ingest(picked)
+      // 兜底：onMounted 时 canvas 可能没就绪，选图后确保 canvasNode 有值
+      if (!canvasNode) {
+        console.warn('[pickImage] canvasNode missing, refetching before render')
+        await fetchCanvasNode()
+      }
       nextTick(() => render())
     }
   } catch (e) {
@@ -261,6 +341,12 @@ function onCanvasTap(e: any): void {
   // 刚拖完，忽略这次 click（mouseup 会触发 click），避免 drag 末尾误触
   if (justDragged) {
     justDragged = false
+    return
+  }
+  // #endif
+  // #ifndef H5
+  if (touchJustDragged) {
+    touchJustDragged = false
     return
   }
   // #endif
@@ -348,7 +434,75 @@ function onMouseUp(): void {
 }
 // #endif
 
+// mp-weixin 专属：单指拖动 pan（zoom>1 时）+ 双指 pinch 缩放
+// #ifndef H5
+let touchDragging = false
+let touchJustDragged = false
+let touchStartX = 0
+let touchStartY = 0
+let touchStartPanX = 0
+let touchStartPanY = 0
+let pinching = false
+let pinchStartDist = 0
+let pinchStartZoom = 1
+
+function touchDist(touches: any[]): number {
+  const dx = touches[0].clientX - touches[1].clientX
+  const dy = touches[0].clientY - touches[1].clientY
+  return Math.hypot(dx, dy)
+}
+
+function onTouchStart(e: any): void {
+  if (!hasPattern.value) return
+  const touches = (e.touches || []) as any[]
+  if (touches.length === 2) {
+    pinching = true
+    touchDragging = false
+    pinchStartDist = touchDist(touches)
+    pinchStartZoom = store.zoom
+  } else if (touches.length === 1) {
+    // zoom<=1 时让 tap 处理（标记格子），不进入拖动
+    if (store.zoom <= 1.01) return
+    touchDragging = true
+    touchJustDragged = false
+    touchStartX = touches[0].clientX
+    touchStartY = touches[0].clientY
+    touchStartPanX = panX.value
+    touchStartPanY = panY.value
+  }
+}
+
+function onTouchMove(e: any): void {
+  if (!hasPattern.value) return
+  const touches = (e.touches || []) as any[]
+  if (pinching && touches.length === 2) {
+    const dist = touchDist(touches)
+    if (pinchStartDist > 0) {
+      const ratio = dist / pinchStartDist
+      const next = Math.min(2.6, Math.max(0.5, +(pinchStartZoom * ratio).toFixed(2)))
+      if (next !== store.zoom) store.setZoom(next)
+    }
+  } else if (touchDragging && touches.length === 1) {
+    const dx = touches[0].clientX - touchStartX
+    const dy = touches[0].clientY - touchStartY
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchJustDragged = true
+    panX.value = touchStartPanX + dx
+    panY.value = touchStartPanY + dy
+    nextTick(() => render())
+  }
+}
+
+function onTouchEnd(): void {
+  if (touchDragging && touchJustDragged) {
+    setTimeout(() => { touchJustDragged = false }, 150)
+  }
+  pinching = false
+  touchDragging = false
+}
+// #endif
+
 async function onExport(): Promise<void> {
+  console.log('[export] onExport called', { exporting: exporting.value, hasPattern: hasPattern.value })
   if (exporting.value || !hasPattern.value) return
   exporting.value = true
   uni.showLoading({ title: '导出中…', mask: true })
@@ -365,11 +519,13 @@ async function onExport(): Promise<void> {
     const W = Math.max(gridW, legendCols * itemW) + 40
     const H = titleH + gridH + legendRows * itemH + 34 + 40
 
+    console.log('[export] createSelectorQuery start')
     const exportNode: any = await new Promise((resolve, reject) => {
       uni.createSelectorQuery()
         .in(instance)
         .select('#' + exportCanvasId)
         .fields({ node: true }, (res: any) => {
+          console.log('[export] selectorQuery result', !!res, !!res?.node)
           if (!res || !res.node) reject(new Error('export canvas not found'))
           else resolve(res.node)
         })
@@ -380,15 +536,21 @@ async function onExport(): Promise<void> {
     const dpr = uni.getSystemInfoSync().pixelRatio
     canvas.width = Math.floor(W * dpr)
     canvas.height = Math.floor(H * dpr)
-    // 显式设 CSS 尺寸 = W × H（CSS px），避免 Safari 在 CSS size 远小于 buffer 时 toDataURL 截断
-    canvas.style.width = W + 'px'
-    canvas.style.height = H + 'px'
+    // #ifdef H5
+    // mp-weixin canvas node 没有 style 属性，仅 H5 设
+    if (canvas.style) {
+      canvas.style.width = W + 'px'
+      canvas.style.height = H + 'px'
+    }
+    // #endif
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.scale(dpr, dpr)
     ctx.clearRect(0, 0, W, H)
     drawComposed(ctx, store.hexGrid, store.rows, store.cols, store.sortedItems, store.brand, bp)
+    console.log('[export] drawComposed done, canvas=', canvas.width, 'x', canvas.height)
 
-    // 用 SVG（自包含 rect/text）→ Image → canvas → PNG，绕开 canvas drawComposed 的潜在问题
+    // #ifdef H5
+    // H5：SVG → Image → canvas → toDataURL，绕开 Safari drawComposed 兼容性问题
     const { svg, width: sW, height: sH } = patternToSVG(store.hexGrid, store.rows, store.cols, store.sortedItems, store.brand)
     const dpr2 = 2
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -415,9 +577,38 @@ async function onExport(): Promise<void> {
     a.click()
     document.body.removeChild(a)
     uni.showToast({ title: 'PNG 已下载', icon: 'success' })
-  } catch (e) {
-    console.error('export failed', e)
-    uni.showToast({ title: '导出失败', icon: 'none' })
+    // #endif
+
+    // #ifndef H5
+    // mp-weixin：导出整张 canvas buffer PNG 到相册（优先 canvas.toTempFilePath，fallback 到 uni.canvasToTempFilePath）
+    console.log('[export] mp-weixin toTempFilePath start, hasFn=', typeof canvas.toTempFilePath)
+    const tempFilePath: string = await new Promise<string>((resolve, reject) => {
+      const opts = {
+        x: 0,
+        y: 0,
+        width: canvas.width,
+        height: canvas.height,
+        destWidth: canvas.width,
+        destHeight: canvas.height,
+        fileType: 'png' as const,
+        success: (r: any) => { console.log('[export] toTempFilePath OK', r.tempFilePath); resolve(r.tempFilePath) },
+        fail: (e: any) => { console.error('[export] toTempFilePath FAIL', e); reject(e) },
+      }
+      if (typeof canvas.toTempFilePath === 'function') {
+        canvas.toTempFilePath(opts)
+      } else {
+        // @ts-ignore
+        uni.canvasToTempFilePath({ ...opts, canvas }, instance?.proxy)
+      }
+    })
+    console.log('[export] saveImageToAlbum start', tempFilePath)
+    await saveImageToAlbum(tempFilePath)
+    console.log('[export] saveImageToAlbum done')
+    uni.showToast({ title: '已保存到相册', icon: 'success' })
+    // #endif
+  } catch (e: any) {
+    console.error('[export] failed:', e?.errMsg || e?.message || JSON.stringify(e), e)
+    uni.showToast({ title: '导出失败：' + (e?.errMsg || e?.message || '未知错误'), icon: 'none', duration: 3000 })
   } finally {
     uni.hideLoading()
     exporting.value = false
@@ -446,7 +637,18 @@ onMounted(() => {
     window.addEventListener('mouseup', onMouseUp as EventListener)
   }, 100)
   // #endif
+  // 持久化：H5 总启用；mp-weixin 仅生产启用（dev 期重新编译应该重置状态，方便调试）
+  // #ifdef H5
   disposePersist = installPersist(store)
+  // #endif
+  // #ifdef MP-WEIXIN
+  if (process.env.NODE_ENV === 'production') {
+    disposePersist = installPersist(store)
+  } else {
+    // dev 期清掉历史快照，避免重新编译还记忆上次图片
+    try { uni.removeStorageSync('pindou:snapshot') } catch {}
+  }
+  // #endif
 })
 
 onUnmounted(() => {
@@ -481,7 +683,7 @@ watch(() => store.placed, () => {
 </script>
 
 <template>
-  <view class="page">
+  <view class="page" :style="{ paddingTop: navPadTop + 'px' }">
     <view class="header">
       <view class="logo">
         <view class="logo-dot" style="background: #F77F00" />
@@ -491,6 +693,11 @@ watch(() => store.placed, () => {
       </view>
       <view class="title-wrap">
         <text class="title">拼豆智能助手</text>
+      </view>
+      <view v-if="isMpWeixin" class="spacer" />
+      <view v-if="isMpWeixin" class="brand-toggle" @tap="showBrandMenu = !showBrandMenu">
+        <text class="brand-current">{{ store.brand }}</text>
+        <text class="brand-arrow">▾</text>
       </view>
     </view>
 
@@ -505,6 +712,10 @@ watch(() => store.placed, () => {
           @mousemove="onMouseMove"
           @mouseup="onMouseUp"
           @mouseleave="onMouseUp"
+          @touchstart="onTouchStart"
+          @touchmove.stop.prevent="onTouchMove"
+          @touchend="onTouchEnd"
+          @touchcancel="onTouchEnd"
         >
           <!-- #ifndef H5 -->
           <image
@@ -517,12 +728,12 @@ watch(() => store.placed, () => {
           <canvas :id="canvasId" type="2d" class="pattern-canvas" />
           <!-- #endif -->
           <view v-if="!hasPattern && !patternImageSrc" class="pick-prompt">
-            <text class="big">点右侧「选择图片」按钮</text>
+            <text class="big">点下方「选择图片」按钮</text>
             <text class="small">上传照片生成像素图</text>
           </view>
         </view>
 
-        <view class="legend-bottom" v-if="hasPattern">
+        <view class="legend-bottom" v-if="hasPattern && !isMpWeixin">
           <view class="legend-bottom-title">色号 → 数量（{{ store.sortedItems.length }} 色）</view>
           <scroll-view scroll-x class="legend-scroll-x" show-scrollbar="false">
             <view class="legend-row">
@@ -540,7 +751,35 @@ watch(() => store.placed, () => {
         </view>
       </view>
 
-      <view class="sidebar">
+      <!-- mp-weixin: 尺寸滑块（画布和按钮之间） -->
+      <view v-if="isMpWeixin" class="size-bar">
+        <text class="size-label">尺寸</text>
+        <slider
+          class="size-slider"
+          :min="50"
+          :max="200"
+          :step="1"
+          :value="store.size"
+          activeColor="#F77F00"
+          backgroundColor="#F3EAD6"
+          block-size="20"
+          @change="(e: any) => store.setSize(e.detail.value)"
+        />
+        <text class="size-display">{{ sizeDisplay }}</text>
+      </view>
+
+      <!-- mp-weixin: 主操作按钮固定在画布下方 -->
+      <view v-if="isMpWeixin" class="main-actions">
+        <view class="big-btn pick" @tap="pickImage">
+          <text>{{ hasPattern ? '换图片' : (ghost ? '重新上传图' : '选择图片') }}</text>
+        </view>
+        <view v-if="hasPattern" class="big-btn export" @tap="onExport">
+          <text>导出图纸</text>
+        </view>
+      </view>
+
+      <!-- H5: sidebar 在 layout 内 -->
+      <view v-if="!isMpWeixin" class="sidebar">
         <ProgressStrip />
         <view class="brand-tabs">
           <view
@@ -567,6 +806,22 @@ watch(() => store.placed, () => {
       </view>
     </view>
 
+    <!-- mp-weixin: 品牌切换菜单（dropdown） -->
+    <view v-if="isMpWeixin && showBrandMenu" class="brand-menu-mask" @tap="showBrandMenu = false">
+      <view class="brand-menu" @tap.stop>
+        <view
+          v-for="b in BRANDS"
+          :key="b"
+          class="brand-menu-item"
+          :class="{ active: store.brand === b }"
+          @tap="selectBrand(b)"
+        >
+          <text>{{ b }}</text>
+          <text v-if="store.brand === b" class="check">✓</text>
+        </view>
+      </view>
+    </view>
+
     <OrigModal :show="showOrig" :src="store.origTempFilePath" @close="showOrig = false" />
 
     <canvas :id="exportCanvasId" type="2d" class="export-canvas" />
@@ -576,7 +831,7 @@ watch(() => store.placed, () => {
 <style lang="scss" scoped>
 .page {
   height: 100vh;
-  padding: 12px;
+  padding: 0 12px 12px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -846,6 +1101,123 @@ watch(() => store.placed, () => {
   width: 10px;
   height: 10px;
   pointer-events: none;
+}
+
+/* mp-weixin: 主屏画布占大头 + 底部两按钮 + 顶部品牌切换（H5 下元素 v-if=false 不渲染，样式留着无副作用）*/
+.brand-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: $surface;
+  border: $border;
+  border-radius: 12px;
+  box-shadow: $shadow-sm;
+  font-size: 14px;
+  font-weight: 700;
+  color: $ink;
+}
+.brand-current {
+  font-weight: 800;
+}
+.brand-arrow {
+  font-size: 12px;
+  color: $ink-soft;
+}
+.brand-menu-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 9999;
+}
+.brand-menu {
+  position: fixed;
+  top: 80px;
+  right: 12px;
+  min-width: 140px;
+  background: $surface;
+  border: $border;
+  border-radius: 12px;
+  box-shadow: $shadow;
+  padding: 4px;
+  z-index: 10000;
+}
+.brand-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: $ink;
+  border-radius: 9px;
+  &.active {
+    background: $ink;
+    color: #fff;
+  }
+  .check {
+    color: $orange;
+    font-weight: 800;
+  }
+  &.active .check {
+    color: #fff;
+  }
+}
+.main-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+.size-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: $surface;
+  border: $border;
+  border-radius: 12px;
+  box-shadow: $shadow-sm;
+  margin-bottom: 8px;
+}
+.size-label {
+  flex: 0 0 auto;
+  font-weight: 800;
+  font-size: 13px;
+  color: $ink;
+}
+.size-slider {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+}
+.size-display {
+  flex: 0 0 auto;
+  min-width: 60px;
+  text-align: right;
+  font-weight: 700;
+  font-size: 13px;
+  color: $orange;
+  font-variant-numeric: tabular-nums;
+}
+.big-btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 14px;
+  border: $border;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: $shadow;
+  text-align: center;
+  &.pick { background: $teal; color: #fff; }
+  &.export { background: $orange; color: #fff; }
 }
 </style>
 
