@@ -39,3 +39,6 @@ coverage/
 # Debug scripts (临时调试用，不进版本库)
 test-mp-*.js
 test-mock-check.js
+
+# Playwright MCP 工具产物（运行时自动生成，可再生）
+.playwright-mcp/

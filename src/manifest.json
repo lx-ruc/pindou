@@ -1,12 +1,13 @@
 {
   "name": "拼豆智能助手",
-  "appid": "wx1481d796b695695e",
+  "appid": "wx3b8baf398bf449d2",
   "description": "AI 驱动的拼豆图纸生成与进度追踪工具",
   "versionName": "0.1.0",
   "versionCode": "100",
   "transformPx": false,
   "mp-weixin": {
-    "appid": "wx1481d796b695695e",
+    "appid": "wx3b8baf398bf449d2",
+    "cloudfunctionRoot": "cloudfunctions/",
     "setting": {
       "urlCheck": false,
       "es6": true,
