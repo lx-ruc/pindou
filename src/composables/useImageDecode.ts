@@ -1,4 +1,5 @@
 import type { ImagePixels, PickedImage } from '@/types/pattern'
+import { UnsafeImageError, CLOUD_ENV_ID } from '@/utils/cloud'
 
 // 微信小程序的 wx 全局，@dcloudio/types 没声明
 declare const wx: any
@@ -13,15 +14,28 @@ function _log(tag: string, ...args: any[]): void {
   console.log(line)
 }
 
-// 压缩到长边 2048，避免低端机 >4096 时 getImageData 静默失败。
+// 压缩到「长边」≤ maxEdge。
+// 旧实现误把 compressedWidth 当长边——只压宽，竖向拍照图（3000×4000）压完变 2048×2731，
+// 高度仍 > maxEdge，下游 offscreen canvas（按图实际尺寸创建）会超大、甚至 getImageData fail。
+// 正确做法：先 getImageInfo 拿宽高，按长边算缩放比，再换算成 compressedWidth。
 async function compressToMaxEdge(tempFilePath: string, maxEdge = 2048): Promise<string> {
   try {
+    const info = (await uni.getImageInfo({ src: tempFilePath })) as any
+    const srcW = info?.width || 0
+    const srcH = info?.height || 0
+    const longer = Math.max(srcW, srcH)
+    if (longer <= 0 || longer <= maxEdge) {
+      _log('decode', 'no compress needed', srcW, '×', srcH)
+      return tempFilePath
+    }
+    const scale = maxEdge / longer
+    const targetWidth = Math.max(1, Math.round(srcW * scale))
     const res = (await uni.compressImage({
       src: tempFilePath,
       quality: 100,
-      compressedWidth: maxEdge,
+      compressedWidth: targetWidth,
     } as any)) as any
-    _log('decode', 'compress ok →', res?.tempFilePath)
+    _log('decode', 'compress ok', srcW, '×', srcH, '→ long-edge', maxEdge, '(w', targetWidth, ') →', res?.tempFilePath)
     return res?.tempFilePath || tempFilePath
   } catch (e) {
     _log('decode', 'compress failed, use original', (e as Error)?.message)
@@ -38,8 +52,10 @@ async function decodePixels(tempFilePath: string): Promise<ImagePixels> {
   if (typeof wx?.createOffscreenCanvas !== 'function') {
     throw new Error('wx.createOffscreenCanvas not available')
   }
-  const off = wx.createOffscreenCanvas({ type: '2d', width: 2048, height: 2048 })
-  const ctx = off.getContext('2d')
+  // 先用占位尺寸创建 canvas（仅为拿 createImage 工厂），图加载后再按实际 W×H 调整 canvas 尺寸。
+  // 旧实现固定 2048×2048：竖向拍照图压缩后高度仍 > 2048 时，drawImage 被裁、getImageData 越界
+  // 直接 fail —— 拍照上传"不生成像素图"的根因。
+  const off = wx.createOffscreenCanvas({ type: '2d', width: 1, height: 1 })
   const img = off.createImage()
 
   await new Promise<void>((resolve, reject) => {
@@ -58,10 +74,18 @@ async function decodePixels(tempFilePath: string): Promise<ImagePixels> {
 
   const W = img.width
   const H = img.height
-  ctx.clearRect(0, 0, 2048, 2048)
+  if (W <= 0 || H <= 0) {
+    throw new Error('decoded image has zero dimension')
+  }
+  // 关键：canvas 尺寸必须 == 图片尺寸，否则 drawImage 被裁 / getImageData 越界 fail。
+  // 赋 width/height 会清空 canvas 并重置 context，因此必须在其后重新 getContext。
+  off.width = W
+  off.height = H
+  const ctx = off.getContext('2d')
+  ctx.clearRect(0, 0, W, H)
   ctx.drawImage(img, 0, 0, W, H)
   const imageData = ctx.getImageData(0, 0, W, H)
-  _log('decode', 'got pixels', imageData.data.length, 'bytes')
+  _log('decode', 'got pixels', imageData.data.length, 'bytes', 'canvas', W, '×', H)
   return {
     data: new Uint8ClampedArray(imageData.data),
     width: W,
@@ -84,6 +108,41 @@ async function decodePixels(tempFilePath: string): Promise<ImagePixels> {
   // #endif
 }
 
+// 图片内容安全检测：uploadFile → callFunction('checkImage') → 判 suggest
+// review/block → 抛 UnsafeImageError（上层提示更换）；API 异常 → fail-open 放行
+// MP-WEIXIN 走云函数；H5 noop（审核只查小程序）
+async function checkImageSafe(tempFilePath: string): Promise<void> {
+  // #ifdef MP-WEIXIN
+  if (!CLOUD_ENV_ID) {
+    _log('safety', 'no env, fail-open')
+    return
+  }
+  let fileID: string | null = null
+  try {
+    const up = await wx.cloud.uploadFile({
+      cloudPath: `check/${Date.now()}.jpg`,
+      filePath: tempFilePath,
+    })
+    fileID = up.fileID
+    const r = await wx.cloud.callFunction({ name: 'checkImage', data: { fileID } })
+    const res = (r && r.result) || {}
+    _log('safety', 'result', JSON.stringify(res))
+    if (res.suggest === 'review' || res.suggest === 'block') {
+      throw new UnsafeImageError()
+    }
+    // pass 或 ok:false（fail-open）→ 放行
+  } catch (e: any) {
+    if (e && e.name === 'UnsafeImageError') throw e
+    _log('safety', 'api error, fail-open', (e && e.message) || e)
+  } finally {
+    if (fileID) wx.cloud.deleteFile({ fileList: [fileID] }).catch(() => {})
+  }
+  // #endif
+  // #ifndef MP-WEIXIN
+  void tempFilePath // H5 noop —— 审核只查小程序
+  // #endif
+}
+
 export async function pickAndDecodeImage(): Promise<PickedImage | null> {
   _log('decode', 'chooseImage start')
   // chooseImage 在 H5 和 mp-weixin 两端都支持；chooseMedia 仅 mp 端有
@@ -101,6 +160,7 @@ export async function pickAndDecodeImage(): Promise<PickedImage | null> {
     return null
   }
 
+  await checkImageSafe(tempFilePath)
   const pixels = await decodePixels(tempFilePath)
   _log('decode', 'done', pixels.width, '×', pixels.height)
   return { tempFilePath, pixels }

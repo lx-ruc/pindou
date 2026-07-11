@@ -8,6 +8,7 @@ const BRANDS: Brand[] = ['MARD', 'COCO', '漫漫', '盼盼', '咪小窝']
 import { drawGrid, drawProgressOverlay, drawComposed } from '@/utils/canvasDraw'
 import { saveImageToAlbum } from '@/utils/permissions'
 import { pickAndDecodeImage } from '@/composables/useImageDecode'
+import { UnsafeImageError } from '@/utils/cloud'
 import { patternToHTML, patternToSVG } from '@/utils/exportHTML'
 import Toolbar from '@/components/pattern/Toolbar.vue'
 import ProgressStrip from '@/components/pattern/ProgressStrip.vue'
@@ -72,12 +73,13 @@ const hasPattern = computed(() => store.hexGrid.length > 0)
 // ghost 态：已恢复历史图纸但原图未存（srcData=null），文案需要表达"重新上传图"
 const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
 // 尺寸显示：按图片宽高比换算成 cols×rows（拼豆板实际格子数）
+// 尺寸显示：直接读 pixelize 实际产出的 rows×cols（长边在前），
+// 不再从 size+aspect 在显示层重新算 —— 避免与图纸实际格子数差 1 格。
 const sizeDisplay = computed(() => {
-  const aspect = store.imgAspect
-  if (!aspect || aspect === 1) return `${store.size}×${store.size}`
-  const long = store.size
-  const short = Math.max(1, Math.round(long * Math.min(aspect, 1 / aspect)))
-  return aspect >= 1 ? `${long}×${short}` : `${short}×${long}`
+  if (!store.rows || !store.cols) return `${store.size}×${store.size}`
+  const long = Math.max(store.rows, store.cols)
+  const short = Math.min(store.rows, store.cols)
+  return `${long}×${short}`
 })
 
 // 视图状态：pan 偏移（CSS px，相对 canvas 左上）+ zoom 倍数
@@ -331,8 +333,12 @@ async function pickImage(): Promise<void> {
       nextTick(() => render())
     }
   } catch (e) {
+    if (e instanceof UnsafeImageError) {
+      uni.showToast({ title: '该图片内容不合规，请更换', icon: 'none', duration: 2500 })
+      return
+    }
     console.error('pick image failed', e)
-    uni.showToast({ title: '图片加载失败', icon: 'none' })
+    uni.showToast({ title: '图片加载失败，请重试', icon: 'none' })
   }
 }
 
@@ -533,9 +539,21 @@ async function onExport(): Promise<void> {
     })
     const canvas = exportNode as any
     const ctx = canvas.getContext('2d')
-    const dpr = uni.getSystemInfoSync().pixelRatio
-    canvas.width = Math.floor(W * dpr)
-    canvas.height = Math.floor(H * dpr)
+    // 导出 canvas 总像素需受控：微信 canvasToTempFilePath 有 native buffer 上限，
+    // 超限报 "native buffer exceed size limit"（日志：5106×5508≈28M 像素即触发）；
+    // iOS Safari ~16.7M、单边 4096。以设备 pixelRatio 起步，压到单边 ≤4096、总像素 ≤14M。
+    const MAX_EXPORT_EDGE = 4096
+    const MAX_EXPORT_PIXELS = 14_000_000
+    const devRatio = uni.getSystemInfoSync().pixelRatio
+    let scale = Math.max(1, devRatio)
+    if (Math.max(W, H) * scale > MAX_EXPORT_EDGE) {
+      scale = Math.max(1, Math.floor(MAX_EXPORT_EDGE / Math.max(W, H)))
+    }
+    if (W * scale * H * scale > MAX_EXPORT_PIXELS) {
+      scale = Math.max(1, Math.floor(Math.sqrt(MAX_EXPORT_PIXELS / (W * H))))
+    }
+    canvas.width = Math.floor(W * scale)
+    canvas.height = Math.floor(H * scale)
     // #ifdef H5
     // mp-weixin canvas node 没有 style 属性，仅 H5 设
     if (canvas.style) {
@@ -544,7 +562,7 @@ async function onExport(): Promise<void> {
     }
     // #endif
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.scale(dpr, dpr)
+    ctx.scale(scale, scale)
     ctx.clearRect(0, 0, W, H)
     drawComposed(ctx, store.hexGrid, store.rows, store.cols, store.sortedItems, store.brand, bp)
     console.log('[export] drawComposed done, canvas=', canvas.width, 'x', canvas.height)
@@ -552,31 +570,49 @@ async function onExport(): Promise<void> {
     // #ifdef H5
     // H5：SVG → Image → canvas → toDataURL，绕开 Safari drawComposed 兼容性问题
     const { svg, width: sW, height: sH } = patternToSVG(store.hexGrid, store.rows, store.cols, store.sortedItems, store.brand)
-    const dpr2 = 2
-    const dataUrl = await new Promise<string>((resolve, reject) => {
+    // 自适应缩放，保证导出 canvas 单边 ≤ 4096、总像素 ≤ 14M。
+    // iOS Safari 单 canvas 硬限 ~16.7M 像素 / 单边 4096，超限 toDataURL 直接抛 SecurityError
+    // （手机端"导出失败"的根因）。固定 dpr2=2 时，尺寸 ≥80 的图纸导出 canvas 必超限。
+    const MAX_CANVAS_EDGE = 4096
+    const MAX_CANVAS_PIXELS = 14_000_000
+    let dpr2 = 2
+    if (Math.max(sW, sH) * dpr2 > MAX_CANVAS_EDGE) {
+      dpr2 = Math.max(1, Math.floor(MAX_CANVAS_EDGE / Math.max(sW, sH)))
+    }
+    if (sW * dpr2 * sH * dpr2 > MAX_CANVAS_PIXELS) {
+      dpr2 = Math.max(1, Math.floor(Math.sqrt(MAX_CANVAS_PIXELS / (sW * sH))))
+    }
+    await new Promise<void>((resolve, reject) => {
       const img = new Image()
       img.onload = () => {
         const c = document.createElement('canvas')
-        c.width = sW * dpr2
-        c.height = sH * dpr2
+        c.width = Math.floor(sW * dpr2)
+        c.height = Math.floor(sH * dpr2)
         const cx = c.getContext('2d')!
-        cx.drawImage(img, 0, 0, sW * dpr2, sH * dpr2)
-        try {
-          resolve(c.toDataURL('image/png'))
-        } catch (e) {
-          reject(e)
-        }
+        cx.drawImage(img, 0, 0, c.width, c.height)
+        // 用 toBlob + Blob URL 触发下载：iOS Safari 对 data: URL 的 <a download> 支持很差
+        // （大图常在新窗口打开而非下载）；Blob URL 更可靠，也避免超长 data URL 被截断。
+        c.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('toBlob 返回空（canvas 尺寸 ' + c.width + '×' + c.height + '）'))
+            return
+          }
+          const blobUrl = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = blobUrl
+          a.download = `pindou-pattern-${store.cols}x${store.rows}-${store.brand}.png`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          // 延迟 revoke，确保 click 触发的导航已读取 blob URL
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 2000)
+          resolve()
+        }, 'image/png')
       }
-      img.onerror = (e) => reject(e)
+      img.onerror = () => reject(new Error('SVG 图加载失败'))
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
     })
-    const a = document.createElement('a')
-    a.href = dataUrl
-    a.download = `pindou-pattern-${store.cols}x${store.rows}-${store.brand}.png`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    uni.showToast({ title: 'PNG 已下载', icon: 'success' })
+    uni.showToast({ title: 'PNG 已下载', icon: 'success', duration: 2000 })
     // #endif
 
     // #ifndef H5
@@ -604,7 +640,7 @@ async function onExport(): Promise<void> {
     console.log('[export] saveImageToAlbum start', tempFilePath)
     await saveImageToAlbum(tempFilePath)
     console.log('[export] saveImageToAlbum done')
-    uni.showToast({ title: '已保存到相册', icon: 'success' })
+    uni.showToast({ title: '已保存到相册', icon: 'success', duration: 2000 })
     // #endif
   } catch (e: any) {
     console.error('[export] failed:', e?.errMsg || e?.message || JSON.stringify(e), e)
@@ -766,6 +802,7 @@ watch(() => store.placed, () => {
           @change="(e: any) => store.setSize(e.detail.value)"
         />
         <text class="size-display">{{ sizeDisplay }}</text>
+        <text v-if="store.totalBeads" class="bead-count">共{{ store.totalBeads }}颗</text>
       </view>
 
       <!-- mp-weixin: 主操作按钮固定在画布下方 -->
@@ -1197,11 +1234,22 @@ watch(() => store.placed, () => {
 }
 .size-display {
   flex: 0 0 auto;
-  min-width: 60px;
+  min-width: 56px;
   text-align: right;
   font-weight: 700;
   font-size: 13px;
   color: $orange;
+  font-variant-numeric: tabular-nums;
+}
+.bead-count {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-weight: 700;
+  font-size: 12px;
+  color: $ink-soft;
+  background: $bg-2;
+  border-radius: 8px;
   font-variant-numeric: tabular-nums;
 }
 .big-btn {
