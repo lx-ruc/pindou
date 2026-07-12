@@ -7,7 +7,7 @@ import type { Brand } from '@/types/pattern'
 const BRANDS: Brand[] = ['MARD', 'COCO', '漫漫', '盼盼', '咪小窝']
 import { drawGrid, drawProgressOverlay, drawComposed } from '@/utils/canvasDraw'
 import { saveImageToAlbum } from '@/utils/permissions'
-import { pickAndDecodeImage } from '@/composables/useImageDecode'
+import { chooseImageTemp, decodeImage } from '@/composables/useImageDecode'
 import { UnsafeImageError } from '@/utils/cloud'
 import { patternToHTML, patternToSVG } from '@/utils/exportHTML'
 import Toolbar from '@/components/pattern/Toolbar.vue'
@@ -66,7 +66,11 @@ const imageRef = ref<any>(null)
 // canvas-card 靠 flex 撑满 layout 剩余宽度，跟随浏览器宽度变宽/变窄（不再用 aspect-ratio 锁宽）
 // 格子仍保持正方形：bp=min(W/cols,H/rows)，grid 居中绘制，米黄底填满整个 canvas-card
 const canvasCardStyle = computed(() => isMpWeixin.value ? 'flex: 1 1 0; min-height: 0;' : '')
-const canvasScrollStyle = computed(() => '')
+const canvasScrollStyle = computed(() => {
+  // canvas-scroll / movable-area 保持 grid 比例，image scaleToFill 才不会拉伸变形
+  if (!store.cols || !store.rows) return ''
+  return `aspect-ratio: ${store.cols} / ${store.rows};`
+})
 
 // 有图纸可交互（原图在 或 已恢复历史图纸 ghost 态）；替代到处判 store.srcData
 const hasPattern = computed(() => store.hexGrid.length > 0)
@@ -84,8 +88,45 @@ const sizeDisplay = computed(() => {
 
 // 视图状态：pan 偏移（CSS px，相对 canvas 左上）+ zoom 倍数
 // zoom > 1 时 grid 比 canvas 大，超出的部分被 overflow:hidden 裁掉，用户拖动 pan 查看不同区域
+// panX/panY：H5 mouse 拖动用（MP 改用 movable-view，不靠 panX/panY 驱动 canvas）
 const panX = ref(0)
 const panY = ref(0)
+// MP movable-view 的 pan/scale 缓存（@change/@scale 实时更新），供 onCanvasTap 坐标逆变换。
+// movable-view 原生管手势（渲染层丝滑），逻辑层只缓存值，不每帧 setData → 不卡。
+const movX = ref(0)
+const movY = ref(0)
+const movScale = ref(1)
+// 视口（松手重绘）：vpZoom=放大倍数（1=整图填满 canvas-scroll），vpX/vpY=视口左上在 grid 的比例。
+// canvas 只画可见局部，cell 随 vpZoom 变大 → 放大看色号清晰。
+const vpZoom = ref(1)
+const vpX = ref(0)
+const vpY = ref(0)
+// vpZoom 上限动态：视口至少 8 格（放大看清单格色号、又不会只剩 4 格），cap 12 防大图 cell 过小
+const vpZoomMax = computed(() => {
+  const longer = Math.max(store.rows, store.cols) || 8
+  return Math.max(2, Math.min(12, Math.floor(longer / 8)))
+})
+// minimap：整图缩略 + zone 红线（固定不动）+ 视口框（指示当前视口位置）。放大拼豆时定位用。
+const minimapImageSrc = ref('')
+// 视口框（红线框）在 minimap 内的位置/尺寸，基于 vpX/vpY/vpZoom（百分比，相对整图）
+const viewportBoxStyle = computed(() => {
+  const sizePct = (1 / vpZoom.value) * 100
+  return `position:absolute;left:${vpX.value * 100}%;top:${vpY.value * 100}%;width:${sizePct}%;height:${sizePct}%;border:2px solid #E63946;box-sizing:border-box;pointer-events:none;`
+})
+// movable-view 松手 commit 用：movKey 重建复位（受控属性复位不可靠，改 key 重建），needResetMov 标志
+const movKey = ref(0)
+let needResetMov = false
+// canvas-scroll CSS 尺寸缓存（commit 时 movX/Y px → grid 比例转换用）
+let lastCw = 0
+let lastCh = 0
+// MP canvas 画"整张 grid"。buffer 长边动态：尽量接近 native 上限 4096（放大少糊），cell = buffer/长边。
+// 注意：放大清晰度受「buffer 像素 vs 屏幕 dpr」物理限制 —— buffer 4096 + dpr 3 时放大约 3 倍内完全清晰，
+// 更大倍数渐糊（8 倍无法完全清晰，除非交互后 canvas 按放大重画可见局部，另议）。
+const MAX_BUF_EDGE = 4096
+function mpCellSize(): number {
+  const longer = Math.max(store.rows, store.cols) || 1
+  return Math.max(8, MAX_BUF_EDGE / longer)
+}
 
 // cells 必须是正方形（拼豆实际就是方格）。bp = min(canvasW/cols, canvasH/rows) * zoom
 // canvas 比例和 grid 不一致时，grid 居中绘制，两侧露出 canvas-card 米色背景（无小框感）
@@ -185,6 +226,7 @@ function render(): void {
     rows: store.rows,
     cols: store.cols,
     hasCanvasNode: !!canvasNode,
+    vpZoom: vpZoom.value,
   })
   if (!hasPattern.value || store.rows === 0 || store.cols === 0) return
   // canvasNode 缺失（onMounted 时 canvas 还没就绪）→ 兜底重新 fetchCanvasNode 再 render
@@ -193,119 +235,146 @@ function render(): void {
     fetchCanvasNode().then(() => render())
     return
   }
-
-  // 拿 image 的 boundingClientRect（= canvas buffer 应该的尺寸，和外框边缘对齐）
-  // 第一次 render 时 image 可能还没显示（patternImageSrc 空），fallback 到 canvas-scroll 内容区
+  // 用 canvas-scroll（= movable-area / H5 view）尺寸作画布显示区。
+  // 不再用 .pattern-image rect —— MP movable-view 会 pan/scale 让 image rect 漂移，不能作基准。
   uni.createSelectorQuery()
     .in(instance)
-    .select('.pattern-image')
-    .boundingClientRect((imgRect: any) => {
-      if (imgRect && imgRect.width > 0 && imgRect.height > 0) {
-        drawPattern(imgRect.width, imgRect.height)
+    .select('.canvas-scroll')
+    .boundingClientRect((rect: any) => {
+      if (!rect || rect.width === 0) {
+        console.warn('[render] canvas-scroll rect missing')
         return
       }
-      // image 没显示，用 canvas-scroll 内容区（减 border）
-      uni.createSelectorQuery()
-        .in(instance)
-        .select('.canvas-scroll')
-        .boundingClientRect((scrollRect: any) => {
-          if (!scrollRect) {
-            console.warn('[render] scrollRect missing')
-            return
-          }
-          console.log('[render] use canvas-scroll size', scrollRect.width, scrollRect.height)
-          // scrollRect 是外框尺寸（含 border 3px），内容区 = 外框 - 2*border
-          drawPattern(scrollRect.width - 6, scrollRect.height - 6)
-        })
-        .exec()
+      drawPattern(rect.width, rect.height)
     })
     .exec()
 }
 
 function drawPattern(cw: number, ch: number): void {
   if (!canvasNode || !hasPattern.value) return
+  lastCw = cw
+  lastCh = ch
   const canvas = canvasNode
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
+
+  if (isMpWeixin.value) {
+    // MP 视口：canvas 只画可见局部（vpZoom 决定放大），buffer = canvas-scroll×dpr（不超 native）。
+    // cell 随 vpZoom 变大 → 放大看色号清晰。
+    const z = vpZoom.value
+    const bufW = Math.floor(cw * canvasDpr)
+    const bufH = Math.floor(ch * canvasDpr)
+    const visCols = Math.max(1, Math.ceil(store.cols / z))
+    const visRows = Math.max(1, Math.ceil(store.rows / z))
+    const sc = Math.max(0, Math.min(store.cols - visCols, Math.floor(vpX.value * store.cols)))
+    const sr = Math.max(0, Math.min(store.rows - visRows, Math.floor(vpY.value * store.rows)))
+    const ec = Math.min(store.cols, sc + visCols)
+    const er = Math.min(store.rows, sr + visRows)
+    const zM = store.showZones ? 3.4 : 0
+    const cell = Math.floor(Math.min(bufW / (visCols + zM), bufH / (visRows + zM)))
+    canvas.width = bufW
+    canvas.height = bufH
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, bufW, bufH)
+    ctx.fillStyle = '#ECE4D2'
+    ctx.fillRect(0, 0, bufW, bufH)
+    drawGrid(ctx, store.hexGrid, store.rows, store.cols, cell, cell, store.showCodes, store.showZones, store.brand, { sc, ec, sr, er })
+    if (store.mode === 'track') {
+      drawProgressOverlay(ctx, store.placed, store.rows, store.cols, cell, cell, store.showZones, store.guide, store.routeOrder, store.progress.nextIdx, { sc, ec, sr, er })
+    }
+    const exportOpts = {
+      x: 0, y: 0, width: bufW, height: bufH, destWidth: bufW, destHeight: bufH, fileType: 'png' as const,
+      success: (r: any) => { console.log('[render] export OK', r.tempFilePath, bufW + 'x' + bufH, 'vpZoom', z); patternImageSrc.value = r.tempFilePath },
+      fail: (e: any) => { console.error('[render] export failed', e) },
+    }
+    if (typeof canvas.toTempFilePath === 'function') {
+      canvas.toTempFilePath(exportOpts)
+    } else {
+      // @ts-ignore uni.canvasToTempFilePath 兼容老 API（部分版本 canvas node 没有 toTempFilePath）
+      uni.canvasToTempFilePath({ ...exportOpts, canvas }, instance?.proxy)
+    }
+    dumpCanvasStats(canvas, ctx, bufW, bufH)
+    return
+  }
+
+  // H5：canvas 按 zoom/pan 画，native-canvas 直接显示（无 toTempFilePath 开销，不卡）
   const dpr = canvasDpr
-
-  // grid 尺寸（拉伸填满 canvas，可能非正方形 cells）
   const { bpX, bpY } = fitBp(cw, ch)
-  const Mx = store.showZones ? Math.round(bpX * 1.7) : 0
-  const My = store.showZones ? Math.round(bpY * 1.7) : 0
-  const W = store.cols * bpX + 2 * Mx
-  const H = store.rows * bpY + 2 * My
-
+  const mx = store.showZones ? Math.round(bpX * 1.7) : 0
+  const my = store.showZones ? Math.round(bpY * 1.7) : 0
+  const W = store.cols * bpX + 2 * mx
+  const H = store.rows * bpY + 2 * my
   canvas.width = Math.floor(cw * dpr)
   canvas.height = Math.floor(ch * dpr)
-  // #ifdef H5
-  // 关键：H5 buffer 尺寸改了后必须显式设 CSS 显示尺寸，否则 dpr>1 时 canvas 会按 buffer 尺寸显示（撑大溢出 canvas-scroll）
-  // mp-weixin canvas node 没有 style 属性，离屏 canvas 显示靠 toTempFilePath → <image>
   if (canvas.style) {
     canvas.style.width = cw + 'px'
     canvas.style.height = ch + 'px'
   }
-  // #endif
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.scale(dpr, dpr)
   ctx.clearRect(0, 0, cw, ch)
-  // 米黄底占满整块画布
   ctx.fillStyle = '#ECE4D2'
   ctx.fillRect(0, 0, cw, ch)
-
-  // 居中 + pan 偏移
   const ox = Math.floor((cw - W) / 2) + panX.value
   const oy = Math.floor((ch - H) / 2) + panY.value
   ctx.translate(ox, oy)
-
   drawGrid(ctx, store.hexGrid, store.rows, store.cols, bpX, bpY, store.showCodes, store.showZones, store.brand)
-
   if (store.mode === 'track') {
-    drawProgressOverlay(
-      ctx,
-      store.placed,
-      store.rows,
-      store.cols,
-      bpX,
-      bpY,
-      store.showZones,
-      store.guide,
-      store.routeOrder,
-      store.progress.nextIdx
-    )
+    drawProgressOverlay(ctx, store.placed, store.rows, store.cols, bpX, bpY, store.showZones, store.guide, store.routeOrder, store.progress.nextIdx)
   }
+  dumpCanvasStats(canvas, ctx, cw, ch)
+}
 
-  // #ifndef H5
-  // MP：canvas 离屏，导出整张 buffer PNG 给 <image> 显示（绕过 canvas 显示层 bug）
-  // 优先 canvas.toTempFilePath（canvas 2d node 方法），不可用时 fallback 到 uni.canvasToTempFilePath（旧 API）
-  const exportOpts = {
-    x: 0,
-    y: 0,
-    width: canvas.width,
-    height: canvas.height,
-    destWidth: canvas.width,
-    destHeight: canvas.height,
-    fileType: 'png' as const,
-    success: (r: any) => {
-      console.log('[render] export OK', r.tempFilePath)
-      patternImageSrc.value = r.tempFilePath
-    },
-    fail: (e: any) => { console.error('[render] export failed', e) },
-  }
-  console.log('[drawPattern] mp-weixin export start', {
-    canvasW: canvas.width,
-    canvasH: canvas.height,
-    hasFn: typeof canvas.toTempFilePath,
+// minimap 离屏 canvas node（整图缩略，独立于主 canvas）
+let minimapCanvasNode: any = null
+function fetchMinimapNode(): Promise<void> {
+  return new Promise((resolve) => {
+    uni.createSelectorQuery()
+      .in(instance)
+      .select('#minimapCanvas')
+      .fields({ node: true } as any, (res: any) => {
+        if (res && res.node) minimapCanvasNode = res.node
+        resolve()
+      })
+      .exec()
   })
+}
+// minimap 画整图缩略（cell 小）+ zone 红线（固定），不画色号（太小看不清）。grid 内容变时重画。
+function drawMinimap(): void {
+  if (!hasPattern.value || store.rows === 0 || store.cols === 0) return
+  // #ifndef H5
+  if (!minimapCanvasNode) {
+    fetchMinimapNode().then(() => drawMinimap())
+    return
+  }
+  const canvas = minimapCanvasNode
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
+  const bufEdge = 240
+  const longer = Math.max(store.rows, store.cols)
+  const cell = bufEdge / longer
+  const mx = store.showZones ? Math.round(cell * 1.7) : 0
+  const my = store.showZones ? Math.round(cell * 1.7) : 0
+  const W = Math.floor(store.cols * cell + 2 * mx)
+  const H = Math.floor(store.rows * cell + 2 * my)
+  canvas.width = W
+  canvas.height = H
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.clearRect(0, 0, W, H)
+  ctx.fillStyle = '#ECE4D2'
+  ctx.fillRect(0, 0, W, H)
+  // minimap 只画分区红线，不画色号（缩略图太小看不清色号）
+  drawGrid(ctx, store.hexGrid, store.rows, store.cols, cell, cell, false, store.showZones, store.brand)
+  const opts = {
+    x: 0, y: 0, width: W, height: H, destWidth: W, destHeight: H, fileType: 'png' as const,
+    success: (r: any) => { console.log('[minimap] export OK', W + 'x' + H); minimapImageSrc.value = r.tempFilePath },
+    fail: (e: any) => console.error('[minimap] export fail', e),
+  }
   if (typeof canvas.toTempFilePath === 'function') {
-    canvas.toTempFilePath(exportOpts)
+    canvas.toTempFilePath(opts)
   } else {
-    // @ts-ignore uni.canvasToTempFilePath 兼容老 API（部分版本 canvas node 没有 toTempFilePath）
-    uni.canvasToTempFilePath({ ...exportOpts, canvas }, instance?.proxy)
+    // @ts-ignore
+    uni.canvasToTempFilePath({ ...opts, canvas }, instance?.proxy)
   }
   // #endif
-  // H5：原生 canvas 直接显示，无需导出
-
-  dumpCanvasStats(canvas, ctx, cw, ch)
 }
 
 async function pickImage(): Promise<void> {
@@ -321,18 +390,37 @@ async function pickImage(): Promise<void> {
     })
     if (!ok) return
   }
+  // 1) 先选图。用户取消则旧像素图保持不动（不清画布、不 loading）。
+  let tempFilePath: string
   try {
-    const picked = await pickAndDecodeImage()
-    if (picked) {
-      store.ingest(picked)
-      // 兜底：onMounted 时 canvas 可能没就绪，选图后确保 canvasNode 有值
-      if (!canvasNode) {
-        console.warn('[pickImage] canvasNode missing, refetching before render')
-        await fetchCanvasNode()
-      }
-      nextTick(() => render())
-    }
+    const picked = await chooseImageTemp()
+    if (!picked) return
+    tempFilePath = picked
   } catch (e) {
+    console.error('chooseImage failed', e)
+    return
+  }
+  // 2) 选图成功：立即清掉旧像素图（否则用户会误以为换图没生效）+ 提示生成中。
+  //    安全检测 + 解码有几秒耗时，期间画布空白 + loading。
+  patternImageSrc.value = ''
+  vpZoom.value = 1; vpX.value = 0; vpY.value = 0  // 换图归位视口（从整图重新看）
+  uni.showLoading({ title: '正在生成新的像素图…', mask: true })
+  // 3) 解码（含内容安全检测）
+  try {
+    const pixels = await decodeImage(tempFilePath)
+    uni.hideLoading()
+    store.ingest({ tempFilePath, pixels })
+    // 兜底：onMounted 时 canvas 可能没就绪，选图后确保 canvasNode 有值
+    if (!canvasNode) {
+      console.warn('[pickImage] canvasNode missing, refetching before render')
+      await fetchCanvasNode()
+    }
+    nextTick(() => render())
+  } catch (e) {
+    // hideLoading 必须在 showToast 之前，否则 loading 层会盖掉/关闭 toast
+    uni.hideLoading()
+    // 解码失败：恢复旧像素图（patternImageSrc 已清，但 store 里旧 hexGrid 还在，重画即可）
+    if (store.hexGrid.length > 0) nextTick(() => render())
     if (e instanceof UnsafeImageError) {
       uni.showToast({ title: '该图片内容不合规，请更换', icon: 'none', duration: 2500 })
       return
@@ -350,42 +438,58 @@ function onCanvasTap(e: any): void {
     return
   }
   // #endif
-  // #ifndef H5
-  if (touchJustDragged) {
-    touchJustDragged = false
-    return
-  }
-  // #endif
-  // 选图入口已移到工具栏按钮，canvas-scroll 点击只在进度模式下标记格子
+  // 选图入口已移到工具栏按钮，点击只在进度模式下标记格子
   if (!hasPattern.value || store.mode !== 'track') return
-  // 进度模式：点击 = 标记/取消已拼
   const rawX = e.detail?.x ?? e.clientX ?? e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX
   const rawY = e.detail?.y ?? e.clientY ?? e.touches?.[0]?.clientY ?? e.changedTouches?.[0]?.clientY
   if (rawX == null || rawY == null) return
-  // 用 canvas-scroll 的 rect 做坐标映射（H5 原生 canvas / MP image 都填满它）
-  uni.createSelectorQuery()
-    .in(instance)
-    .select('.canvas-scroll')
-    .boundingClientRect((rect: any) => {
-      if (!rect) return
-      const cw = rect.width
-      const ch = rect.height
-      const x = rawX - rect.left
-      const y = rawY - rect.top
-      const { bpX, bpY } = fitBp(cw, ch)
-      const Mx = store.showZones ? Math.round(bpX * 1.7) : 0
-      const My = store.showZones ? Math.round(bpY * 1.7) : 0
-      const W = store.cols * bpX + 2 * Mx
-      const H = store.rows * bpY + 2 * My
-      const ox = Math.floor((cw - W) / 2) + panX.value
-      const oy = Math.floor((ch - H) / 2) + panY.value
-      const c = Math.floor((x - ox - Mx) / bpX)
-      const r = Math.floor((y - oy - My) / bpY)
-      if (r < 0 || r >= store.rows || c < 0 || c >= store.cols) return
-      store.togglePlaced(r, c)
-      nextTick(() => render())
-    })
-    .exec()
+
+  // 由 (fx, fy)（grid 内比例 0~1）+ grid 尺寸 + margin → cell (r,c)，命中则标记
+  const hitCell = (fx: number, fy: number, gridW: number, gridH: number, cell: number, mx: number, my: number): void => {
+    const c = Math.floor((fx * gridW - mx) / cell)
+    const r = Math.floor((fy * gridH - my) / cell)
+    if (r < 0 || r >= store.rows || c < 0 || c >= store.cols) return
+    store.togglePlaced(r, c)
+    nextTick(() => render())
+  }
+
+  if (isMpWeixin.value) {
+    // MP 视口：image 显示当前视口（vpX/vpY/vpZoom 局部）。tap 比例 fx/fy → 全局 grid 坐标。
+    uni.createSelectorQuery()
+      .in(instance)
+      .select('.pattern-image')
+      .boundingClientRect((imgRect: any) => {
+        if (!imgRect || imgRect.width === 0) return
+        const fx = (rawX - imgRect.left) / imgRect.width
+        const fy = (rawY - imgRect.top) / imgRect.height
+        // 全局 grid 比例 = vpX + fx/vpZoom（视口宽占 grid 的 1/vpZoom）；忽略 zone margin 小误差
+        const gc = Math.floor((vpX.value + fx / vpZoom.value) * store.cols)
+        const gr = Math.floor((vpY.value + fy / vpZoom.value) * store.rows)
+        if (gr < 0 || gr >= store.rows || gc < 0 || gc >= store.cols) return
+        store.togglePlaced(gr, gc)
+        nextTick(() => render())
+      })
+      .exec()
+  } else {
+    // H5：canvas-scroll rect + fitBp + panX 映射
+    uni.createSelectorQuery()
+      .in(instance)
+      .select('.canvas-scroll')
+      .boundingClientRect((rect: any) => {
+        if (!rect) return
+        const x = rawX - rect.left
+        const y = rawY - rect.top
+        const { bpX, bpY } = fitBp(rect.width, rect.height)
+        const Mx = store.showZones ? Math.round(bpX * 1.7) : 0
+        const My = store.showZones ? Math.round(bpY * 1.7) : 0
+        const W = store.cols * bpX + 2 * Mx
+        const H = store.rows * bpY + 2 * My
+        const ox = Math.floor((rect.width - W) / 2) + panX.value
+        const oy = Math.floor((rect.height - H) / 2) + panY.value
+        hitCell((x - ox) / W, (y - oy) / H, W, H, bpX, Mx, My)
+      })
+      .exec()
+  }
 }
 
 // H5 专属：滚轮缩放 + 鼠标拖动 pan（mp-weixin 无鼠标事件，靠手势）
@@ -440,70 +544,41 @@ function onMouseUp(): void {
 }
 // #endif
 
-// mp-weixin 专属：单指拖动 pan（zoom>1 时）+ 双指 pinch 缩放
+// mp-weixin 专属：movable-view 的 pan/scale 缓存（@change/@scale 回调，高频但只存值、不渲染 → 不卡）
 // #ifndef H5
-let touchDragging = false
-let touchJustDragged = false
-let touchStartX = 0
-let touchStartY = 0
-let touchStartPanX = 0
-let touchStartPanY = 0
-let pinching = false
-let pinchStartDist = 0
-let pinchStartZoom = 1
-
-function touchDist(touches: any[]): number {
-  const dx = touches[0].clientX - touches[1].clientX
-  const dy = touches[0].clientY - touches[1].clientY
-  return Math.hypot(dx, dy)
+function onMovChange(e: any): void {
+  movX.value = e.detail.x || 0
+  movY.value = e.detail.y || 0
 }
-
-function onTouchStart(e: any): void {
-  if (!hasPattern.value) return
+function onMovScale(e: any): void {
+  movScale.value = e.detail.scale || 1
+}
+// 松手：把 movable-view 累计的 pan/scale commit 到 vpZoom/vpX/vpY，render 重画新视口（清晰）。
+// render 后 watch patternImageSrc 触发 movKey++ 重建 movable-view（复位，避免变换叠加到新视口 image）。
+function onMovTouchEnd(e: any): void {
   const touches = (e.touches || []) as any[]
-  if (touches.length === 2) {
-    pinching = true
-    touchDragging = false
-    pinchStartDist = touchDist(touches)
-    pinchStartZoom = store.zoom
-  } else if (touches.length === 1) {
-    // zoom<=1 时让 tap 处理（标记格子），不进入拖动
-    if (store.zoom <= 1.01) return
-    touchDragging = true
-    touchJustDragged = false
-    touchStartX = touches[0].clientX
-    touchStartY = touches[0].clientY
-    touchStartPanX = panX.value
-    touchStartPanY = panY.value
+  if (touches.length > 0) return // 还有手指没抬起，不 commit
+  const ms = movScale.value
+  const mx = movX.value
+  const my = movY.value
+  // 无变换（纯点击/未动）不 commit，清缓存即可
+  if (Math.abs(ms - 1) < 0.02 && Math.abs(mx) < 1 && Math.abs(my) < 1) {
+    movScale.value = 1; movX.value = 0; movY.value = 0
+    return
   }
-}
-
-function onTouchMove(e: any): void {
-  if (!hasPattern.value) return
-  const touches = (e.touches || []) as any[]
-  if (pinching && touches.length === 2) {
-    const dist = touchDist(touches)
-    if (pinchStartDist > 0) {
-      const ratio = dist / pinchStartDist
-      const next = Math.min(2.6, Math.max(0.5, +(pinchStartZoom * ratio).toFixed(2)))
-      if (next !== store.zoom) store.setZoom(next)
-    }
-  } else if (touchDragging && touches.length === 1) {
-    const dx = touches[0].clientX - touchStartX
-    const dy = touches[0].clientY - touchStartY
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) touchJustDragged = true
-    panX.value = touchStartPanX + dx
-    panY.value = touchStartPanY + dy
-    nextTick(() => render())
-  }
-}
-
-function onTouchEnd(): void {
-  if (touchDragging && touchJustDragged) {
-    setTimeout(() => { touchJustDragged = false }, 150)
-  }
-  pinching = false
-  touchDragging = false
+  const newVpZoom = Math.min(vpZoomMax.value, Math.max(1, +(vpZoom.value * ms).toFixed(2)))
+  // movX/Y（image 像素偏移）→ grid 比例偏移：image 显示视口宽=lastCw，视口占 grid 的 1/vpZoom
+  const maxVpX = Math.max(0, 1 - 1 / newVpZoom)
+  const maxVpY = Math.max(0, 1 - 1 / newVpZoom)
+  const dxGrid = lastCw > 0 ? -mx / lastCw / vpZoom.value : 0
+  const dyGrid = lastCh > 0 ? -my / lastCh / vpZoom.value : 0
+  vpX.value = Math.max(0, Math.min(maxVpX, vpX.value + dxGrid))
+  vpY.value = Math.max(0, Math.min(maxVpY, vpY.value + dyGrid))
+  vpZoom.value = newVpZoom
+  console.log('[mov] commit', { newVpZoom, vpX: vpX.value, vpY: vpY.value, ms, mx, my })
+  needResetMov = true
+  movScale.value = 1; movX.value = 0; movY.value = 0
+  nextTick(() => render())
 }
 // #endif
 
@@ -638,9 +713,9 @@ async function onExport(): Promise<void> {
       }
     })
     console.log('[export] saveImageToAlbum start', tempFilePath)
-    await saveImageToAlbum(tempFilePath)
-    console.log('[export] saveImageToAlbum done')
-    uni.showToast({ title: '已保存到相册', icon: 'success', duration: 2000 })
+    const ok = await saveImageToAlbum(tempFilePath)
+    console.log('[export] saveImageToAlbum done, ok =', ok)
+    if (ok) uni.showToast({ title: '已保存到相册', icon: 'success', duration: 3000 })
     // #endif
   } catch (e: any) {
     console.error('[export] failed:', e?.errMsg || e?.message || JSON.stringify(e), e)
@@ -657,6 +732,7 @@ onMounted(() => {
   nextTick(() => {
     setTimeout(() => {
       fetchCanvasNode().then(() => render())
+      fetchMinimapNode().then(() => drawMinimap())
     }, 50)
   })
   // #ifdef H5
@@ -697,7 +773,7 @@ onUnmounted(() => {
 // watch UI 状态变化触发 render（primitive sources，不 deep walk typed array）
 watch(() => store.mode, () => nextTick(() => render()))
 watch(() => store.brand, () => nextTick(() => render()))
-watch(() => store.size, () => { panX.value = 0; panY.value = 0; nextTick(() => render()) })
+watch(() => store.size, () => { panX.value = 0; panY.value = 0; vpZoom.value = 1; vpX.value = 0; vpY.value = 0; nextTick(() => render()) })
 // zoom 回到 1 时自动归位 pan（避免像素图偏在一边）
 watch(() => store.zoom, (z) => {
   if (z <= 1.01) { panX.value = 0; panY.value = 0 }
@@ -715,6 +791,15 @@ watch(() => store.paletteThreshold, () => nextTick(() => render()))
 // placed 用 shallowRef + triggerRef，watch 引用变化（triggerRef 触发）
 watch(() => store.placed, () => {
   if (store.mode === 'track') nextTick(() => render())
+})
+// grid 内容变（选图/调尺寸/品牌/合并等）→ 重画 minimap（minimap 显示整图，与主视口 pan/zoom 无关）
+watch(() => store.hexGrid, () => drawMinimap())
+// movable-view 松手 commit 后 render 完成（patternImageSrc 更新）→ movKey++ 重建 movable-view 复位
+watch(patternImageSrc, () => {
+  if (needResetMov) {
+    needResetMov = false
+    movKey.value++
+  }
 })
 </script>
 
@@ -739,6 +824,7 @@ watch(() => store.placed, () => {
 
     <view class="layout">
       <view class="card canvas-card" :style="canvasCardStyle">
+        <!-- #ifdef H5 -->
         <view
           class="canvas-scroll"
           :style="canvasScrollStyle"
@@ -748,26 +834,44 @@ watch(() => store.placed, () => {
           @mousemove="onMouseMove"
           @mouseup="onMouseUp"
           @mouseleave="onMouseUp"
-          @touchstart="onTouchStart"
-          @touchmove.stop.prevent="onTouchMove"
-          @touchend="onTouchEnd"
-          @touchcancel="onTouchEnd"
         >
-          <!-- #ifndef H5 -->
-          <image
-            v-if="patternImageSrc"
-            ref="imageRef"
-            :src="patternImageSrc"
-            mode="scaleToFill"
-            class="pattern-image"
-          />
-          <canvas :id="canvasId" type="2d" class="pattern-canvas" />
-          <!-- #endif -->
           <view v-if="!hasPattern && !patternImageSrc" class="pick-prompt">
             <text class="big">点下方「选择图片」按钮</text>
             <text class="small">上传照片生成像素图</text>
           </view>
         </view>
+        <!-- #endif -->
+        <!-- #ifndef H5 -->
+        <movable-area class="canvas-scroll" :style="canvasScrollStyle" scale-area>
+          <movable-view
+            v-if="patternImageSrc"
+            :key="movKey"
+            direction="all"
+            scale
+            :scale-min="1"
+            :scale-max="vpZoomMax"
+            out-of-bounds
+            :damping="40"
+            @change="onMovChange"
+            @scale="onMovScale"
+            @touchend="onMovTouchEnd"
+            @tap="onCanvasTap"
+            class="pattern-image-wrap"
+          >
+            <image
+              ref="imageRef"
+              :src="patternImageSrc"
+              mode="scaleToFill"
+              class="pattern-image"
+            />
+          </movable-view>
+          <canvas :id="canvasId" type="2d" class="pattern-canvas" />
+          <view v-if="!hasPattern && !patternImageSrc" class="pick-prompt">
+            <text class="big">点下方「选择图片」按钮</text>
+            <text class="small">上传照片生成像素图</text>
+          </view>
+        </movable-area>
+        <!-- #endif -->
 
         <view class="legend-bottom" v-if="hasPattern && !isMpWeixin">
           <view class="legend-bottom-title">色号 → 数量（{{ store.sortedItems.length }} 色）</view>
@@ -861,7 +965,15 @@ watch(() => store.placed, () => {
 
     <OrigModal :show="showOrig" :src="store.origTempFilePath" @close="showOrig = false" />
 
+    <!-- #ifndef H5 -->
+    <view v-if="hasPattern && minimapImageSrc" class="minimap" :style="{ aspectRatio: store.cols + ' / ' + store.rows }">
+      <image :src="minimapImageSrc" mode="scaleToFill" class="minimap-img" />
+      <view :style="viewportBoxStyle" />
+    </view>
+    <!-- #endif -->
+
     <canvas :id="exportCanvasId" type="2d" class="export-canvas" />
+    <canvas id="minimapCanvas" type="2d" class="minimap-canvas" />
   </view>
 </template>
 
@@ -1093,6 +1205,11 @@ watch(() => store.placed, () => {
   height: 10px;
   pointer-events: none;
 }
+.pattern-image-wrap {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
 .pattern-image {
   display: block;
   width: 100%;
@@ -1138,6 +1255,32 @@ watch(() => store.placed, () => {
   width: 10px;
   height: 10px;
   pointer-events: none;
+}
+.minimap-canvas {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.minimap {
+  position: fixed;
+  right: 12px;
+  bottom: 76px;
+  width: 120px;
+  background: rgba(251, 246, 236, 0.92);
+  border: 2px solid $ink;
+  border-radius: 8px;
+  box-shadow: 2px 2px 0 $ink;
+  padding: 4px;
+  box-sizing: border-box;
+  z-index: 100;
+}
+.minimap-img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
 }
 
 /* mp-weixin: 主屏画布占大头 + 底部两按钮 + 顶部品牌切换（H5 下元素 v-if=false 不渲染，样式留着无副作用）*/

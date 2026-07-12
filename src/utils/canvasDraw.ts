@@ -14,22 +14,33 @@ export function drawGrid(
   bpY: number,
   withCode: boolean,
   withZones: boolean,
-  brand: Brand
+  brand: Brand,
+  view?: { sc: number; ec: number; sr: number; er: number }
 ): void {
+  // view = 视口局部（sc/ec/sr/er 为起止行列）。不传 = 全图（drawComposed 等仍画全图）。
+  // 局部时只遍历可见格子，cell 从 canvas (Mx,My) 起，按 (c-sc)/(r-sr) 定位。
+  const sc = view?.sc ?? 0
+  const ec = view?.ec ?? cols
+  const sr = view?.sr ?? 0
+  const er = view?.er ?? rows
   const Mx = withZones ? Math.round(bpX * 1.7) : 0
   const My = withZones ? Math.round(bpY * 1.7) : 0
   const ox = Mx
   const oy = My
   const bpMin = Math.min(bpX, bpY)
+  const visCols = ec - sc
+  const visRows = er - sr
 
   g.fillStyle = '#ECE4D2'
-  g.fillRect(ox, oy, cols * bpX, rows * bpY)
+  g.fillRect(ox, oy, visCols * bpX, visRows * bpY)
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const hex = hexGrid[r][c]
-      const x = ox + c * bpX
-      const y = oy + r * bpY
+  for (let r = sr; r < er; r++) {
+    const row = hexGrid[r]
+    if (!row) continue
+    for (let c = sc; c < ec; c++) {
+      const hex = row[c]
+      const x = ox + (c - sc) * bpX
+      const y = oy + (r - sr) * bpY
       g.fillStyle = hex
       g.fillRect(x + 0.5, y + 0.5, bpX - 1, bpY - 1)
 
@@ -52,30 +63,36 @@ export function drawGrid(
     g.lineWidth = Math.max(2, bpMin * 0.14)
     g.lineCap = 'square'
     g.beginPath()
-    for (let i = 0; i <= cols; i += ZONE) {
-      const x = Math.round(ox + i * bpX) + 0.5
+    // zone 线：全局 i=ZONE 倍数且落在 [sc,ec] / [sr,er] 内才画
+    for (let i = Math.ceil(sc / ZONE) * ZONE; i <= ec; i += ZONE) {
+      const x = Math.round(ox + (i - sc) * bpX) + 0.5
       g.moveTo(x, oy)
-      g.lineTo(x, oy + rows * bpY)
+      g.lineTo(x, oy + visRows * bpY)
     }
-    for (let i = 0; i <= rows; i += ZONE) {
-      const y = Math.round(oy + i * bpY) + 0.5
+    for (let i = Math.ceil(sr / ZONE) * ZONE; i <= er; i += ZONE) {
+      const y = Math.round(oy + (i - sr) * bpY) + 0.5
       g.moveTo(ox, y)
-      g.lineTo(ox + cols * bpX, y)
+      g.lineTo(ox + visCols * bpX, y)
     }
     g.stroke()
     g.lineWidth = Math.max(2.5, bpMin * 0.16)
-    g.strokeRect(ox + 0.5, oy + 0.5, cols * bpX - 1, rows * bpY - 1)
+    g.strokeRect(ox + 0.5, oy + 0.5, visCols * bpX - 1, visRows * bpY - 1)
 
     g.fillStyle = '#E63946'
     g.font = '700 ' + Math.floor(bpMin * 0.8) + 'px sans-serif'
     g.textBaseline = 'middle'
-    for (let zc = 0; zc * ZONE < cols; zc++) {
+    // 字母/数字：仅画中心落在视口内的 zone
+    for (let zc = Math.floor(sc / ZONE); zc * ZONE < ec; zc++) {
+      const center = zc * ZONE + ZONE / 2
+      if (center < sc || center >= ec) continue
       g.textAlign = 'center'
-      g.fillText(String.fromCharCode(65 + zc), ox + (zc * ZONE + ZONE / 2) * bpX, oy - My * 0.5)
+      g.fillText(String.fromCharCode(65 + zc), ox + (center - sc) * bpX, oy - My * 0.5)
     }
-    for (let zr = 0; zr * ZONE < rows; zr++) {
+    for (let zr = Math.floor(sr / ZONE); zr * ZONE < er; zr++) {
+      const center = zr * ZONE + ZONE / 2
+      if (center < sr || center >= er) continue
       g.textAlign = 'center'
-      g.fillText(String(zr + 1), ox - Mx * 0.5, oy + (zr * ZONE + ZONE / 2) * bpY)
+      g.fillText(String(zr + 1), ox - Mx * 0.5, oy + (center - sr) * bpY)
     }
   }
 }
@@ -91,19 +108,26 @@ export function drawProgressOverlay(
   showZones: boolean,
   guide: boolean,
   routeOrder: [number, number][],
-  nextIdx: number
+  nextIdx: number,
+  view?: { sc: number; ec: number; sr: number; er: number }
 ): void {
+  const sc = view?.sc ?? 0
+  const ec = view?.ec ?? cols
+  const sr = view?.sr ?? 0
+  const er = view?.er ?? rows
   const Mx = showZones ? Math.round(bpX * 1.7) : 0
   const My = showZones ? Math.round(bpY * 1.7) : 0
   const ox = Mx
   const oy = My
   const bpMin = Math.min(bpX, bpY)
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (!placed[r][c]) continue
-      const x = ox + c * bpX
-      const y = oy + r * bpY
+  for (let r = sr; r < er; r++) {
+    const row = placed[r]
+    if (!row) continue
+    for (let c = sc; c < ec; c++) {
+      if (!row[c]) continue
+      const x = ox + (c - sc) * bpX
+      const y = oy + (r - sr) * bpY
       g.fillStyle = 'rgba(35,32,46,0.5)'
       g.fillRect(x, y, bpX, bpY)
       g.strokeStyle = '#fff'
@@ -124,8 +148,9 @@ export function drawProgressOverlay(
   if (guide) {
     for (let k = 0; k < 3 && nextIdx + k < routeOrder.length; k++) {
       const [r, c] = routeOrder[nextIdx + k]
-      const x = ox + c * bpX
-      const y = oy + r * bpY
+      if (r < sr || r >= er || c < sc || c >= ec) continue
+      const x = ox + (c - sc) * bpX
+      const y = oy + (r - sr) * bpY
       g.strokeStyle = '#F77F00'
       g.lineWidth = k === 0 ? Math.max(2.5, bpMin * 0.2) : Math.max(1.5, bpMin * 0.1)
       g.globalAlpha = k === 0 ? 1 : 0.4

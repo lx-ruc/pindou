@@ -143,7 +143,9 @@ async function checkImageSafe(tempFilePath: string): Promise<void> {
   // #endif
 }
 
-export async function pickAndDecodeImage(): Promise<PickedImage | null> {
+// 仅选图，返回临时路径（null = 用户取消）。拆出来让调用方在选图成功后、
+// 解码前先清旧画布 + 显示 loading，避免"换图时旧像素图还在"的错觉。
+export async function chooseImageTemp(): Promise<string | null> {
   _log('decode', 'chooseImage start')
   // chooseImage 在 H5 和 mp-weixin 两端都支持；chooseMedia 仅 mp 端有
   const chooseRes = (await uni.chooseImage({
@@ -159,9 +161,21 @@ export async function pickAndDecodeImage(): Promise<PickedImage | null> {
     _log('decode', 'no tempFilePath in result')
     return null
   }
+  return tempFilePath
+}
 
+// 内容安全检测 + 像素解码（选图后的耗时阶段）
+export async function decodeImage(tempFilePath: string): Promise<ImagePixels> {
   await checkImageSafe(tempFilePath)
   const pixels = await decodePixels(tempFilePath)
   _log('decode', 'done', pixels.width, '×', pixels.height)
+  return pixels
+}
+
+// 便捷组合：选图 + 解码一步到位（取消选图返回 null）
+export async function pickAndDecodeImage(): Promise<PickedImage | null> {
+  const tempFilePath = await chooseImageTemp()
+  if (!tempFilePath) return null
+  const pixels = await decodeImage(tempFilePath)
   return { tempFilePath, pixels }
 }
