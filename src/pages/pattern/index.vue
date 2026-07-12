@@ -91,34 +91,9 @@ const sizeDisplay = computed(() => {
 // panX/panY：H5 mouse 拖动用（MP 改用 movable-view，不靠 panX/panY 驱动 canvas）
 const panX = ref(0)
 const panY = ref(0)
-// MP movable-view 的 pan/scale 缓存（@change/@scale 实时更新），供 onCanvasTap 坐标逆变换。
-// movable-view 原生管手势（渲染层丝滑），逻辑层只缓存值，不每帧 setData → 不卡。
-const movX = ref(0)
-const movY = ref(0)
-const movScale = ref(1)
-// 视口（松手重绘）：vpZoom=放大倍数（1=整图填满 canvas-scroll），vpX/vpY=视口左上在 grid 的比例。
-// canvas 只画可见局部，cell 随 vpZoom 变大 → 放大看色号清晰。
-const vpZoom = ref(1)
-const vpX = ref(0)
-const vpY = ref(0)
-// vpZoom 上限动态：视口至少 8 格（放大看清单格色号、又不会只剩 4 格），cap 12 防大图 cell 过小
-const vpZoomMax = computed(() => {
-  const longer = Math.max(store.rows, store.cols) || 8
-  return Math.max(2, Math.min(12, Math.floor(longer / 8)))
-})
-// minimap：整图缩略 + zone 红线（固定不动）+ 视口框（指示当前视口位置）。放大拼豆时定位用。
-const minimapImageSrc = ref('')
-// 视口框（红线框）在 minimap 内的位置/尺寸，基于 vpX/vpY/vpZoom（百分比，相对整图）
-const viewportBoxStyle = computed(() => {
-  const sizePct = (1 / vpZoom.value) * 100
-  return `position:absolute;left:${vpX.value * 100}%;top:${vpY.value * 100}%;width:${sizePct}%;height:${sizePct}%;border:2px solid #E63946;box-sizing:border-box;pointer-events:none;`
-})
-// movable-view 松手 commit 用：movKey 重建复位（受控属性复位不可靠，改 key 重建），needResetMov 标志
+// movable-view 数据切换（换图/调尺寸）时 movKey++ 重建复位（受控属性复位不可靠，改 key 重建）。
+// 缩放/平移由 movable-view 原生管手势（图片式连续缩放），逻辑层不追踪 → 渲染层丝滑、不卡。
 const movKey = ref(0)
-let needResetMov = false
-// canvas-scroll CSS 尺寸缓存（commit 时 movX/Y px → grid 比例转换用）
-let lastCw = 0
-let lastCh = 0
 // MP canvas 画"整张 grid"。buffer 长边动态：尽量接近 native 上限 4096（放大少糊），cell = buffer/长边。
 // 注意：放大清晰度受「buffer 像素 vs 屏幕 dpr」物理限制 —— buffer 4096 + dpr 3 时放大约 3 倍内完全清晰，
 // 更大倍数渐糊（8 倍无法完全清晰，除非交互后 canvas 按放大重画可见局部，另议）。
@@ -226,7 +201,6 @@ function render(): void {
     rows: store.rows,
     cols: store.cols,
     hasCanvasNode: !!canvasNode,
-    vpZoom: vpZoom.value,
   })
   if (!hasPattern.value || store.rows === 0 || store.cols === 0) return
   // canvasNode 缺失（onMounted 时 canvas 还没就绪）→ 兜底重新 fetchCanvasNode 再 render
@@ -252,38 +226,30 @@ function render(): void {
 
 function drawPattern(cw: number, ch: number): void {
   if (!canvasNode || !hasPattern.value) return
-  lastCw = cw
-  lastCh = ch
   const canvas = canvasNode
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
 
   if (isMpWeixin.value) {
-    // MP 视口：canvas 只画可见局部（vpZoom 决定放大），buffer = canvas-scroll×dpr（不超 native）。
-    // cell 随 vpZoom 变大 → 放大看色号清晰。
-    const z = vpZoom.value
-    const bufW = Math.floor(cw * canvasDpr)
-    const bufH = Math.floor(ch * canvasDpr)
-    const visCols = Math.max(1, Math.ceil(store.cols / z))
-    const visRows = Math.max(1, Math.ceil(store.rows / z))
-    const sc = Math.max(0, Math.min(store.cols - visCols, Math.floor(vpX.value * store.cols)))
-    const sr = Math.max(0, Math.min(store.rows - visRows, Math.floor(vpY.value * store.rows)))
-    const ec = Math.min(store.cols, sc + visCols)
-    const er = Math.min(store.rows, sr + visRows)
-    const zM = store.showZones ? 3.4 : 0
-    const cell = Math.floor(Math.min(bufW / (visCols + zM), bufH / (visRows + zM)))
+    // MP 图片式：canvas 一次画整张 grid（mpCellSize 让长边≈4096），转 PNG 给 movable-view 双指连续缩放。
+    // 放大靠 movable-view 缩放 image（不重画）—— buffer 内清晰、更大渐糊（用户已接受）。
+    const cell = mpCellSize()
+    const Mx = store.showZones ? Math.round(cell * 1.7) : 0
+    const My = Mx
+    const bufW = Math.floor(store.cols * cell + 2 * Mx)
+    const bufH = Math.floor(store.rows * cell + 2 * My)
     canvas.width = bufW
     canvas.height = bufH
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, bufW, bufH)
     ctx.fillStyle = '#ECE4D2'
     ctx.fillRect(0, 0, bufW, bufH)
-    drawGrid(ctx, store.hexGrid, store.rows, store.cols, cell, cell, store.showCodes, store.showZones, store.brand, { sc, ec, sr, er })
+    drawGrid(ctx, store.hexGrid, store.rows, store.cols, cell, cell, store.showCodes, store.showZones, store.brand)
     if (store.mode === 'track') {
-      drawProgressOverlay(ctx, store.placed, store.rows, store.cols, cell, cell, store.showZones, store.guide, store.routeOrder, store.progress.nextIdx, { sc, ec, sr, er })
+      drawProgressOverlay(ctx, store.placed, store.rows, store.cols, cell, cell, store.showZones, store.guide, store.routeOrder, store.progress.nextIdx)
     }
     const exportOpts = {
       x: 0, y: 0, width: bufW, height: bufH, destWidth: bufW, destHeight: bufH, fileType: 'png' as const,
-      success: (r: any) => { console.log('[render] export OK', r.tempFilePath, bufW + 'x' + bufH, 'vpZoom', z); patternImageSrc.value = r.tempFilePath },
+      success: (r: any) => { console.log('[render] export OK', r.tempFilePath, bufW + 'x' + bufH); patternImageSrc.value = r.tempFilePath },
       fail: (e: any) => { console.error('[render] export failed', e) },
     }
     if (typeof canvas.toTempFilePath === 'function') {
@@ -324,58 +290,6 @@ function drawPattern(cw: number, ch: number): void {
   dumpCanvasStats(canvas, ctx, cw, ch)
 }
 
-// minimap 离屏 canvas node（整图缩略，独立于主 canvas）
-let minimapCanvasNode: any = null
-function fetchMinimapNode(): Promise<void> {
-  return new Promise((resolve) => {
-    uni.createSelectorQuery()
-      .in(instance)
-      .select('#minimapCanvas')
-      .fields({ node: true } as any, (res: any) => {
-        if (res && res.node) minimapCanvasNode = res.node
-        resolve()
-      })
-      .exec()
-  })
-}
-// minimap 画整图缩略（cell 小）+ zone 红线（固定），不画色号（太小看不清）。grid 内容变时重画。
-function drawMinimap(): void {
-  if (!hasPattern.value || store.rows === 0 || store.cols === 0) return
-  // #ifndef H5
-  if (!minimapCanvasNode) {
-    fetchMinimapNode().then(() => drawMinimap())
-    return
-  }
-  const canvas = minimapCanvasNode
-  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
-  const bufEdge = 240
-  const longer = Math.max(store.rows, store.cols)
-  const cell = bufEdge / longer
-  const mx = store.showZones ? Math.round(cell * 1.7) : 0
-  const my = store.showZones ? Math.round(cell * 1.7) : 0
-  const W = Math.floor(store.cols * cell + 2 * mx)
-  const H = Math.floor(store.rows * cell + 2 * my)
-  canvas.width = W
-  canvas.height = H
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.clearRect(0, 0, W, H)
-  ctx.fillStyle = '#ECE4D2'
-  ctx.fillRect(0, 0, W, H)
-  // minimap 只画分区红线，不画色号（缩略图太小看不清色号）
-  drawGrid(ctx, store.hexGrid, store.rows, store.cols, cell, cell, false, store.showZones, store.brand)
-  const opts = {
-    x: 0, y: 0, width: W, height: H, destWidth: W, destHeight: H, fileType: 'png' as const,
-    success: (r: any) => { console.log('[minimap] export OK', W + 'x' + H); minimapImageSrc.value = r.tempFilePath },
-    fail: (e: any) => console.error('[minimap] export fail', e),
-  }
-  if (typeof canvas.toTempFilePath === 'function') {
-    canvas.toTempFilePath(opts)
-  } else {
-    // @ts-ignore
-    uni.canvasToTempFilePath({ ...opts, canvas }, instance?.proxy)
-  }
-  // #endif
-}
 
 async function pickImage(): Promise<void> {
   // ghost 态（已恢复历史图纸 + 有进度）下重新上传会清空进度，二次确认
@@ -403,7 +317,7 @@ async function pickImage(): Promise<void> {
   // 2) 选图成功：立即清掉旧像素图（否则用户会误以为换图没生效）+ 提示生成中。
   //    安全检测 + 解码有几秒耗时，期间画布空白 + loading。
   patternImageSrc.value = ''
-  vpZoom.value = 1; vpX.value = 0; vpY.value = 0  // 换图归位视口（从整图重新看）
+  movKey.value++  // 换图 → 复位 movable-view（从整图 fit 重新看）
   uni.showLoading({ title: '正在生成新的像素图…', mask: true })
   // 3) 解码（含内容安全检测）
   try {
@@ -454,7 +368,7 @@ function onCanvasTap(e: any): void {
   }
 
   if (isMpWeixin.value) {
-    // MP 视口：image 显示当前视口（vpX/vpY/vpZoom 局部）。tap 比例 fx/fy → 全局 grid 坐标。
+    // MP 图片式：image = 整张 grid，movable-view 缩放/平移。imgRect 已含变换 → fx/fy 直接乘 cols/rows。
     uni.createSelectorQuery()
       .in(instance)
       .select('.pattern-image')
@@ -462,9 +376,10 @@ function onCanvasTap(e: any): void {
         if (!imgRect || imgRect.width === 0) return
         const fx = (rawX - imgRect.left) / imgRect.width
         const fy = (rawY - imgRect.top) / imgRect.height
-        // 全局 grid 比例 = vpX + fx/vpZoom（视口宽占 grid 的 1/vpZoom）；忽略 zone margin 小误差
-        const gc = Math.floor((vpX.value + fx / vpZoom.value) * store.cols)
-        const gr = Math.floor((vpY.value + fy / vpZoom.value) * store.rows)
+        if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return
+        // 整图 fx/fy → grid 坐标（忽略 zone margin 小误差）
+        const gc = Math.floor(fx * store.cols)
+        const gr = Math.floor(fy * store.rows)
         if (gr < 0 || gr >= store.rows || gc < 0 || gc >= store.cols) return
         store.togglePlaced(gr, gc)
         nextTick(() => render())
@@ -541,44 +456,6 @@ function onMouseUp(): void {
     setTimeout(() => { justDragged = false }, 150)
   }
   dragging = false
-}
-// #endif
-
-// mp-weixin 专属：movable-view 的 pan/scale 缓存（@change/@scale 回调，高频但只存值、不渲染 → 不卡）
-// #ifndef H5
-function onMovChange(e: any): void {
-  movX.value = e.detail.x || 0
-  movY.value = e.detail.y || 0
-}
-function onMovScale(e: any): void {
-  movScale.value = e.detail.scale || 1
-}
-// 松手：把 movable-view 累计的 pan/scale commit 到 vpZoom/vpX/vpY，render 重画新视口（清晰）。
-// render 后 watch patternImageSrc 触发 movKey++ 重建 movable-view（复位，避免变换叠加到新视口 image）。
-function onMovTouchEnd(e: any): void {
-  const touches = (e.touches || []) as any[]
-  if (touches.length > 0) return // 还有手指没抬起，不 commit
-  const ms = movScale.value
-  const mx = movX.value
-  const my = movY.value
-  // 无变换（纯点击/未动）不 commit，清缓存即可
-  if (Math.abs(ms - 1) < 0.02 && Math.abs(mx) < 1 && Math.abs(my) < 1) {
-    movScale.value = 1; movX.value = 0; movY.value = 0
-    return
-  }
-  const newVpZoom = Math.min(vpZoomMax.value, Math.max(1, +(vpZoom.value * ms).toFixed(2)))
-  // movX/Y（image 像素偏移）→ grid 比例偏移：image 显示视口宽=lastCw，视口占 grid 的 1/vpZoom
-  const maxVpX = Math.max(0, 1 - 1 / newVpZoom)
-  const maxVpY = Math.max(0, 1 - 1 / newVpZoom)
-  const dxGrid = lastCw > 0 ? -mx / lastCw / vpZoom.value : 0
-  const dyGrid = lastCh > 0 ? -my / lastCh / vpZoom.value : 0
-  vpX.value = Math.max(0, Math.min(maxVpX, vpX.value + dxGrid))
-  vpY.value = Math.max(0, Math.min(maxVpY, vpY.value + dyGrid))
-  vpZoom.value = newVpZoom
-  console.log('[mov] commit', { newVpZoom, vpX: vpX.value, vpY: vpY.value, ms, mx, my })
-  needResetMov = true
-  movScale.value = 1; movX.value = 0; movY.value = 0
-  nextTick(() => render())
 }
 // #endif
 
@@ -732,7 +609,6 @@ onMounted(() => {
   nextTick(() => {
     setTimeout(() => {
       fetchCanvasNode().then(() => render())
-      fetchMinimapNode().then(() => drawMinimap())
     }, 50)
   })
   // #ifdef H5
@@ -773,7 +649,7 @@ onUnmounted(() => {
 // watch UI 状态变化触发 render（primitive sources，不 deep walk typed array）
 watch(() => store.mode, () => nextTick(() => render()))
 watch(() => store.brand, () => nextTick(() => render()))
-watch(() => store.size, () => { panX.value = 0; panY.value = 0; vpZoom.value = 1; vpX.value = 0; vpY.value = 0; nextTick(() => render()) })
+watch(() => store.size, () => { panX.value = 0; panY.value = 0; movKey.value++; nextTick(() => render()) })
 // zoom 回到 1 时自动归位 pan（避免像素图偏在一边）
 watch(() => store.zoom, (z) => {
   if (z <= 1.01) { panX.value = 0; panY.value = 0 }
@@ -791,15 +667,6 @@ watch(() => store.paletteThreshold, () => nextTick(() => render()))
 // placed 用 shallowRef + triggerRef，watch 引用变化（triggerRef 触发）
 watch(() => store.placed, () => {
   if (store.mode === 'track') nextTick(() => render())
-})
-// grid 内容变（选图/调尺寸/品牌/合并等）→ 重画 minimap（minimap 显示整图，与主视口 pan/zoom 无关）
-watch(() => store.hexGrid, () => drawMinimap())
-// movable-view 松手 commit 后 render 完成（patternImageSrc 更新）→ movKey++ 重建 movable-view 复位
-watch(patternImageSrc, () => {
-  if (needResetMov) {
-    needResetMov = false
-    movKey.value++
-  }
 })
 </script>
 
@@ -849,12 +716,9 @@ watch(patternImageSrc, () => {
             direction="all"
             scale
             :scale-min="1"
-            :scale-max="vpZoomMax"
+            :scale-max="10"
             out-of-bounds
             :damping="40"
-            @change="onMovChange"
-            @scale="onMovScale"
-            @touchend="onMovTouchEnd"
             @tap="onCanvasTap"
             class="pattern-image-wrap"
           >
@@ -965,15 +829,7 @@ watch(patternImageSrc, () => {
 
     <OrigModal :show="showOrig" :src="store.origTempFilePath" @close="showOrig = false" />
 
-    <!-- #ifndef H5 -->
-    <view v-if="hasPattern && minimapImageSrc" class="minimap" :style="{ aspectRatio: store.cols + ' / ' + store.rows }">
-      <image :src="minimapImageSrc" mode="scaleToFill" class="minimap-img" />
-      <view :style="viewportBoxStyle" />
-    </view>
-    <!-- #endif -->
-
     <canvas :id="exportCanvasId" type="2d" class="export-canvas" />
-    <canvas id="minimapCanvas" type="2d" class="minimap-canvas" />
   </view>
 </template>
 
@@ -1256,33 +1112,6 @@ watch(patternImageSrc, () => {
   height: 10px;
   pointer-events: none;
 }
-.minimap-canvas {
-  position: fixed;
-  left: -9999px;
-  top: 0;
-  width: 10px;
-  height: 10px;
-  pointer-events: none;
-}
-.minimap {
-  position: fixed;
-  right: 12px;
-  bottom: 76px;
-  width: 120px;
-  background: rgba(251, 246, 236, 0.92);
-  border: 2px solid $ink;
-  border-radius: 8px;
-  box-shadow: 2px 2px 0 $ink;
-  padding: 4px;
-  box-sizing: border-box;
-  z-index: 100;
-}
-.minimap-img {
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
-}
-
 /* mp-weixin: 主屏画布占大头 + 底部两按钮 + 顶部品牌切换（H5 下元素 v-if=false 不渲染，样式留着无副作用）*/
 .brand-toggle {
   display: inline-flex;

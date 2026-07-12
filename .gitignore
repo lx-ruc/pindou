@@ -42,3 +42,6 @@ test-mock-check.js
 
 # Playwright MCP 工具产物（运行时自动生成，可再生）
 .playwright-mcp/
+
+# 像素化研究脚本输出（可再生）
+test-output/
