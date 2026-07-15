@@ -19,7 +19,7 @@ export const usePatternStore = defineStore('pattern', () => {
   // 设置
   const brand = ref<Brand>(DEFAULT_BRAND)
   const mode = ref<Mode>('view')
-  const size = ref(52)
+  const size = ref(120)
   const zoom = ref(1)
   const showZones = ref(true)
   const showCodes = ref(true)
@@ -71,6 +71,9 @@ export const usePatternStore = defineStore('pattern', () => {
     srcW.value = pixels.width
     srcH.value = pixels.height
     imgAspect.value = pixels.width / pixels.height
+    // 自适应 size：格 ~6px 保细线轮廓（格细 = 线占多数，dominant 不吞线），clamp 80-200
+    const longer = Math.max(pixels.width, pixels.height)
+    size.value = Math.max(80, Math.min(200, Math.round(longer / 6)))
     origTempFilePath.value = tempFilePath
     placed.value = []
     recompute()

@@ -1,13 +1,13 @@
 import type { Hex } from '@/types/pattern'
-import { ciede2000, hexToLab } from './colorLab'
-import type { Lab } from './colorLab'
+import { hexToOklab, oklabDistance } from './oklab'
+import type { Oklab } from './oklab'
 
-export type DistFn = (a: Lab, b: Lab) => number
+export type DistFn = (a: Oklab, b: Oklab) => number
 
 export interface MergeSpatialOptions {
   /** 同色判定阈值（CIEDE2000 单位），distFn < threshold 视为同色连通 */
   threshold: number
-  /** 色差函数，默认 ciede2000；测试可注入简化距离 */
+  /** 色差函数，默认 oklab；测试可注入简化距离 */
   distFn?: DistFn
 }
 
@@ -18,11 +18,11 @@ export interface MergePaletteOptions {
   minCount?: number
   /** 小色归并到大色的色差阈值，默认 12 */
   threshold?: number
-  /** 色差函数，默认 ciede2000 */
+  /** 色差函数，默认 oklab */
   distFn?: DistFn
 }
 
-const DEFAULT_DIST: DistFn = ciede2000
+const DEFAULT_DIST: DistFn = oklabDistance
 
 // 8 邻居方向（拼豆对角接触也算同色块）
 const DIRS8: ReadonlyArray<readonly [number, number]> = [
@@ -61,7 +61,7 @@ export function mergeSpatial(
       stack.push(startIdx)
       visited[startIdx] = 1
       const baseHex = grid[sr][sc]
-      const baseLab = hexToLab(baseHex)
+      const baseLab = hexToOklab(baseHex)
 
       while (stack.length) {
         const idx = stack.pop() as number
@@ -74,7 +74,7 @@ export function mergeSpatial(
           if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue
           const ni = nr * cols + nc
           if (visited[ni]) continue
-          if (dist(baseLab, hexToLab(grid[nr][nc])) < threshold) {
+          if (dist(baseLab, hexToOklab(grid[nr][nc])) < threshold) {
             visited[ni] = 1
             stack.push(ni)
           }
@@ -141,11 +141,11 @@ export function mergePalette(grid: readonly Hex[][], options: MergePaletteOption
   // 小色 → 最近大色（仅当 distFn < threshold 才归并）
   const mergeTo = new Map<Hex, Hex>()
   for (const s of smalls) {
-    const labS = hexToLab(s)
+    const labS = hexToOklab(s)
     let best: Hex | null = null
     let bestD = Infinity
     for (const b of bigs) {
-      const d = dist(labS, hexToLab(b))
+      const d = dist(labS, hexToOklab(b))
       if (d < bestD) {
         bestD = d
         best = b
@@ -167,9 +167,9 @@ export function mergePalette(grid: readonly Hex[][], options: MergePaletteOption
       let by = ''
       let bd = Infinity
       for (let i = 0; i < list.length; i++) {
-        const labI = hexToLab(list[i])
+        const labI = hexToOklab(list[i])
         for (let j = i + 1; j < list.length; j++) {
-          const d = dist(labI, hexToLab(list[j]))
+          const d = dist(labI, hexToOklab(list[j]))
           if (d < bd) {
             bd = d
             bx = list[i]

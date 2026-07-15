@@ -1,5 +1,5 @@
 import type { Hex, ImagePixels } from '@/types/pattern'
-import { nearestHex } from './color'
+import { findClosestOklab } from './oklab'
 
 export interface PixelizeResult {
   rows: number
@@ -47,7 +47,8 @@ export function pixelize(
       for (let y = y0; y < y1; y += ystep) {
         for (let x = x0; x < x1; x += step) {
           const i = (y * srcW + x) * 4
-          const key = ((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4)
+          // 精确 RGB 众数（不量化）——对齐 Zippland dominant 模式（calculateCellRepresentativeColor）
+          const key = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2]
           bins[key] = (bins[key] || 0) + 1
         }
       }
@@ -60,10 +61,10 @@ export function pixelize(
           best = +k
         }
       }
-      const R = (best >> 8) & 0xf
-      const G = (best >> 4) & 0xf
-      const B = best & 0xf
-      row[c] = nearestHex((R << 4) | R, (G << 4) | G, (B << 4) | B)
+      const R = (best >> 16) & 0xff
+      const G = (best >> 8) & 0xff
+      const B = best & 0xff
+      row[c] = findClosestOklab(R, G, B)
     }
     hexGrid[r] = row
   }
