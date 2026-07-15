@@ -30,7 +30,7 @@
 - **新增 / 改动**：`src/stores/pattern.ts`（profile state + applyProfile + 合并流水线 recompute）、`src/components/pattern/Toolbar.vue`（顶部档位分段钮）、`src/utils/colorMerge.ts`（无算法改动，可能加一个组合 helper）。算法层纯函数不变。
 - **客户端优先**：纯客户端，无后端、无 AI 模型。
 - **数据 / 调参**：档位数值依赖实测；需准备一组代表性卡通图 + 照片作为调参集（见 tasks §4）。
-- **持久化**：快照（Snapshot）v2，增 `profile` + `spatialEnabled`/`paletteEnabled`（替 `mergeMode`），含 v1→v2 迁移，跨会话恢复。
+- **持久化**：快照（Snapshot）v2，增 `spatialEnabled`/`paletteEnabled`（替 `mergeMode`；profile 派生、不存），含 v1→v2 迁移，跨会话恢复。
 - **关联但不在本范围**：
   - 自动识别图类（②c，测色数 / 纹理方差自动选档）→ 未来独立变更。
   - 按板分页导出（MVP 任务 3.6）与 size 上限相关，但是独立变更；本变更只让「默认 size 随图类偏移」，不解决大图上限（见 design 决策 7）。

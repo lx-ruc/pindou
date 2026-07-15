@@ -63,8 +63,16 @@
 ### 决策 7（关联，非本变更）：抬 cap 的前置是按板分页导出（3.6）
 分页同时解决两件事：① **大图保真**——源 >720px 在 cap 120 下每豆 7–17px、偏离 6px 保真基线而失真，放开 cap 才能 recover；② **让 size lever 触及大图**（见决策 6 的 lever-range 分析）。两道都卡在同一个导出 buffer 墙上，3.6 一并拆掉。**本变更只让「默认 size 随图类偏移」，不抬 cap**（那是 3.6 独立变更）；记录此因果，避免把「档位倍率」与「cap 上限」混为一谈。
 
+### 决策 8：profile 是派生标签（computed），不是显式状态机
+profile 不存为可写 state、不做转移函数，而是一个 **computed**：把当前 profile 相关参数与两档 bundle 常量逐一比对，匹配 cartoon 则 cartoon、匹配 photo 则 photo、否则 custom。零转移、零 setter 耦合；未来加新参数只需加入比对集，老 setter 不用改。
+
+- **profile 相关参数集**（改这些会改变派生 profile）：`size`、`mergeEnabled`、`spatialEnabled`、`paletteEnabled`、`spatialThreshold`、`paletteMinCount`、`paletteThreshold`、`paletteMaxColors`。**不含** `zoom` / `showZones` / `showCodes` / `guide` / `brand` / `mode`（改这些不翻 custom，否则按钮乱闪）。
+- **custom 下再点预设**：静默覆盖用户手改 + toast「已切换到 X，手动调整已重置」。不弹确认（摩擦大；手改可重新拧回）。`applyProfile(p)` = 写入 p 的 bundle 常量；派生 profile 随之变回 p。
+- **ingest 新图的初始档位 = photo**：照片是常见且更难的场景，photo 预设是「看起来还行」的安全起点；卡通用户多知道要什么、会主动切。ingest 改为调 `applyProfile('photo')`（接管 size + merge 参数），而非现在的直接置 size。**记住上次档位**为未来 refinement（需单独持久化 `lastProfile`，本期不做）。
+- **派生 ⇒ 快照不存 profile**：profile 由各参数派生，持久化只存参数（含 `spatialEnabled`/`paletteEnabled`），恢复时自动重派生；按钮高亮也随派生 profile 自动对齐。
+
 ## 数据模型改动
 
-- store 新增 `profile: 'cartoon' | 'photo' | 'custom'`：选档写 cartoon/photo；用户手动改任一相关旋钮 → 置 `custom`（表示已偏离预设）。
+- store 新增**派生 `profile`（computed，非可写 state；见决策 8）**：比对当前 profile 相关参数与两档 bundle 常量，匹配则该档、否则 custom。两档 bundle 常量（`CARTOON_PROFILE` / `PHOTO_PROFILE`）+ `applyProfile(p)` 写入函数；ingest 默认 `applyProfile('photo')`。
 - 合并参数从单 `mergeMode` 扩为**固定序流水线 + 每步开关**：`spatialEnabled`/`paletteEnabled` 两布尔（固定序 spatial→palette、不可重排，见决策 2 SD-1/2）；各步阈值复用现有字段（`spatialThreshold` / `paletteMinCount` / `paletteThreshold` / `paletteMaxColors`）。`mergeMode` 旧字段经 v1→v2 迁移映射（`'palette'`→palette on/spatial off，`'spatial'`→反之）。
 - 持久化 `Snapshot` v2 增 `profile` + `spatialEnabled`/`paletteEnabled`（替 `mergeMode`），含 v1→v2 迁移。

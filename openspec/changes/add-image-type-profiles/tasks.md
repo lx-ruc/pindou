@@ -7,10 +7,10 @@
 
 ## 2. 档位机制（决策 1 / 6）
 
-- [ ] 2.1 store 加 `profile: 'cartoon' | 'photo' | 'custom'` + `applyProfile(p)`：一次性写入 size 倍率结果 + `spatialEnabled`/`paletteEnabled` + 各阈值
-- [ ] 2.2 用户手动改任一相关旋钮 → `profile` 置 `custom`（不锁、仅标记偏离）
+- [ ] 2.1 store 加 `applyProfile(p)`（写入 p 的 bundle 常量：size 倍率 + `spatialEnabled`/`paletteEnabled` + 各阈值）+ 两档 bundle 常量；profile 为 computed（见 2.2）。ingest 默认调 `applyProfile('photo')`
+- [ ] 2.2 `profile` 为 computed（比对当前参数与两档 bundle，匹配则该档、否则 custom）；无显式转移、无 setter 耦合。定义 profile 相关参数集（见 design 决策 8）
 - [ ] 2.3 统一 size 上限为单一常量（消除 预设 ≤100 / 默认 120 / 滑块 200 三处不一致）
-- [ ] 2.4 `Snapshot` v2 增 `profile` + `spatialEnabled`/`paletteEnabled`（替 `mergeMode`）+ v1→v2 迁移，跨会话恢复（`applyRestored` 同步）
+- [ ] 2.4 `Snapshot` v2 增 `spatialEnabled`/`paletteEnabled`（替 `mergeMode`；profile 派生不存）+ v1→v2 迁移，跨会话恢复（`applyRestored` 同步；profile 自动重派生）
 
 ## 3. UI（决策 1）
 

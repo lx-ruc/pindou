@@ -17,7 +17,7 @@
 
 #### Scenario: 跨会话恢复档位
 - **WHEN** 用户选了照片档后退出，再次进入同一项目
-- **THEN** 恢复 profile、各步开关（spatialEnabled/paletteEnabled）及各参数
+- **THEN** 恢复各步开关（spatialEnabled/paletteEnabled）及各参数，profile 随之自动重派生
 
 ### Requirement: 合并流水线（spatial → palette）
 系统 SHALL 将颜色合并从单模式互斥升级为有序流水线（固定序：先空间平滑 spatial 再色号归并 palette，顺序不可由用户重排）；每步独立阈值，且 SHALL 允许通过每步开关跳过任一步骤。语义：spatial 负责 8 连通同色区域平滑（单格区域不处理），palette 负责小频次色归并与色数封顶。
