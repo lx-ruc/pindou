@@ -21,6 +21,14 @@ const sizeDisplay = computed(() => {
 
 // ghost 态：已恢复历史图纸但原图未存（srcData=null），调参/原图需重传图
 const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
+
+// 选图像类型档位：applyProfile 写入 size + 合并步开关 + 阈值；手改任一则派生 profile 变 custom。
+// 覆盖用户已有手改（决策 8：静默覆盖 + toast）。
+function selectProfile(p: 'cartoon' | 'photo'): void {
+  if (store.profile === p) return
+  store.applyProfile(p)
+  uni.showToast({ title: p === 'cartoon' ? '已切换到卡通预设' : '已切换到照片预设', icon: 'none' })
+}
 </script>
 
 <template>
@@ -36,6 +44,12 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
         :class="{ active: store.mode === 'track' }"
         @tap="store.setMode('track')"
       >进度</view>
+    </view>
+
+    <view class="tool-label" v-if="store.srcData">图类型</view>
+    <view class="seg" v-if="store.srcData">
+      <view class="seg-btn" :class="{ active: store.profile === 'cartoon' }" @tap="selectProfile('cartoon')">卡通</view>
+      <view class="seg-btn" :class="{ active: store.profile === 'photo' }" @tap="selectProfile('photo')">照片</view>
     </view>
 
     <view class="tool-label">尺寸</view>
@@ -84,23 +98,28 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
       </view>
       <template v-if="store.mergeEnabled">
         <view class="seg">
-          <view class="seg-btn" :class="{ active: store.mergeMode === 'spatial' }" @tap="store.setMergeMode('spatial')">边界</view>
-          <view class="seg-btn" :class="{ active: store.mergeMode === 'palette' }" @tap="store.setMergeMode('palette')">色号</view>
+          <view class="seg-btn" :class="{ active: !store.spatialEnabled }" @tap="store.setSpatialEnabled(false)">边界关</view>
+          <view class="seg-btn" :class="{ active: store.spatialEnabled }" @tap="store.setSpatialEnabled(true)">边界平滑</view>
         </view>
-        <view class="tool-label" v-if="store.mergeMode === 'spatial'">阈值 {{ store.spatialThreshold }}</view>
-        <slider
-          v-if="store.mergeMode === 'spatial'"
-          class="merge-slider"
-          :min="5"
-          :max="20"
-          :step="1"
-          :value="store.spatialThreshold"
-          activeColor="#F77F00"
-          backgroundColor="#F3EAD6"
-          block-size="18"
-          @change="(e: any) => store.setSpatialThreshold(e.detail.value)"
-        />
-        <template v-else>
+        <template v-if="store.spatialEnabled">
+          <view class="tool-label">阈值 {{ store.spatialThreshold }}</view>
+          <slider
+            class="merge-slider"
+            :min="5"
+            :max="20"
+            :step="1"
+            :value="store.spatialThreshold"
+            activeColor="#F77F00"
+            backgroundColor="#F3EAD6"
+            block-size="18"
+            @change="(e: any) => store.setSpatialThreshold(e.detail.value)"
+          />
+        </template>
+        <view class="seg">
+          <view class="seg-btn" :class="{ active: !store.paletteEnabled }" @tap="store.setPaletteEnabled(false)">色号关</view>
+          <view class="seg-btn" :class="{ active: store.paletteEnabled }" @tap="store.setPaletteEnabled(true)">色号归并</view>
+        </view>
+        <template v-if="store.paletteEnabled">
           <view class="tool-label">色数 {{ store.paletteMaxColors === 0 ? '不限' : store.paletteMaxColors }}</view>
           <slider
             class="merge-slider"
@@ -124,6 +143,18 @@ const ghost = computed(() => !store.srcData && store.hexGrid.length > 0)
             backgroundColor="#F3EAD6"
             block-size="18"
             @change="(e: any) => store.setPaletteMinCount(e.detail.value)"
+          />
+          <view class="tool-label">色差阈值 {{ store.paletteThreshold }}</view>
+          <slider
+            class="merge-slider"
+            :min="4"
+            :max="30"
+            :step="1"
+            :value="store.paletteThreshold"
+            activeColor="#F77F00"
+            backgroundColor="#F3EAD6"
+            block-size="18"
+            @change="(e: any) => store.setPaletteThreshold(e.detail.value)"
           />
         </template>
       </template>

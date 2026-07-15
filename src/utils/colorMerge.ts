@@ -199,3 +199,54 @@ export function mergePalette(grid: readonly Hex[][], options: MergePaletteOption
 
   return out
 }
+
+/** 流水线单步：kind + 开关 + 该 kind 对应参数（仅对应 kind 读对应字段）。 */
+export interface MergePipelineStep {
+  kind: 'spatial' | 'palette'
+  enabled: boolean
+  /** spatial 同色连通阈值（distFn < threshold） */
+  spatialThreshold?: number
+  /** palette 目标色数上限；0 / undefined = 不限 */
+  paletteMaxColors?: number
+  /** palette 大色最小频次 */
+  paletteMinCount?: number
+  /** palette 小色归并色差阈值 */
+  paletteThreshold?: number
+}
+
+export interface MergePipelineOptions {
+  distFn?: DistFn
+}
+
+/**
+ * 有序流水线：按 steps 顺序，对 enabled 的步骤依次应用，每步产出喂给下一步。
+ * 顺序由调用方决定（store 固定 spatial→palette）。纯函数、不改输入；空 grid 返回 []。
+ */
+export function mergePipeline(
+  grid: readonly Hex[][],
+  rows: number,
+  cols: number,
+  steps: readonly MergePipelineStep[],
+  options: MergePipelineOptions = {}
+): Hex[][] {
+  let out = grid.map((row) => row.slice())
+  if (rows === 0 || cols === 0) return out
+  const distFn = options.distFn ?? DEFAULT_DIST
+  for (const step of steps) {
+    if (!step.enabled) continue
+    if (step.kind === 'spatial') {
+      out = mergeSpatial(out, rows, cols, {
+        threshold: step.spatialThreshold ?? 0,
+        distFn,
+      })
+    } else {
+      out = mergePalette(out, {
+        maxColors: step.paletteMaxColors,
+        minCount: step.paletteMinCount,
+        threshold: step.paletteThreshold,
+        distFn,
+      })
+    }
+  }
+  return out
+}

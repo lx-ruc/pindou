@@ -1,14 +1,18 @@
 import { watch, type WatchSource } from 'vue'
-import type { Brand, Hex, MergeMode, Mode } from '@/types/pattern'
+import type { Brand, Hex, Mode } from '@/types/pattern'
 import { setKV } from './storage'
 
 export const SNAPSHOT_KEY = 'pindou:snapshot'
-const SNAPSHOT_VERSION = 1
+const SNAPSHOT_VERSION = 2 as const
 
 /** store 最小契约 —— 用 ReturnType 自动跟 store 演进，零运行时开销（纯类型） */
 export type PatternStore = ReturnType<typeof import('@/stores/pattern').usePatternStore>
 
-/** 单项目快照：13 参数 + 几何 + 图纸 + 进度（不含原图像素 → 恢复后进入 ghost 态） */
+/**
+ * 单项目快照（v2）：参数 + 几何 + 图纸 + 进度（不含原图像素 → 恢复后进入 ghost 态）。
+ * v2 相对 v1：合并参数由单 mergeMode 改为 spatialEnabled/paletteEnabled 两步开关
+ * （profile 不存——派生，见 stores/pattern 决策 8）。v1 快照在 deserialize 自动迁移。
+ */
 export interface Snapshot {
   v: typeof SNAPSHOT_VERSION
   params: {
@@ -20,7 +24,8 @@ export interface Snapshot {
     showCodes: boolean
     guide: boolean
     mergeEnabled: boolean
-    mergeMode: MergeMode
+    spatialEnabled: boolean
+    paletteEnabled: boolean
     spatialThreshold: number
     paletteMaxColors: number
     paletteMinCount: number
@@ -48,7 +53,8 @@ export function buildSnapshot(store: PatternStore): Snapshot {
       showCodes: store.showCodes,
       guide: store.guide,
       mergeEnabled: store.mergeEnabled,
-      mergeMode: store.mergeMode,
+      spatialEnabled: store.spatialEnabled,
+      paletteEnabled: store.paletteEnabled,
       spatialThreshold: store.spatialThreshold,
       paletteMaxColors: store.paletteMaxColors,
       paletteMinCount: store.paletteMinCount,
@@ -68,7 +74,7 @@ export function serialize(s: Snapshot): string {
   return JSON.stringify(s)
 }
 
-/** 解析 + 版本校验；非法 JSON 或版本不符返回 null（不抛，避免阻断启动） */
+/** 解析 + 版本/迁移；非法 JSON 或版本不符返回 null（不抛，避免阻断启动） */
 export function deserialize(json: string): Snapshot | null {
   let parsed: unknown
   try {
@@ -76,7 +82,22 @@ export function deserialize(json: string): Snapshot | null {
   } catch {
     return null
   }
+  if (parsed === null || typeof parsed !== 'object') return null
+  // v1 → v2 迁移：mergeMode → spatialEnabled/paletteEnabled（确定性 1:1 映射）
+  if ((parsed as { v?: unknown }).v === 1) {
+    parsed = migrateV1toV2(parsed as Record<string, unknown>)
+  }
   return isSnapshot(parsed) ? parsed : null
+}
+
+/** v1 → v2：'palette'→{spatial:off,palette:on}；'spatial'→{spatial:on,palette:off} */
+function migrateV1toV2(s: Record<string, unknown>): Record<string, unknown> {
+  const params = { ...((s.params as Record<string, unknown>) ?? {}) }
+  const mode = params.mergeMode
+  params.spatialEnabled = mode === 'spatial'
+  params.paletteEnabled = mode !== 'spatial' // 'palette' 或缺失 → palette 开
+  delete params.mergeMode
+  return { ...s, v: SNAPSHOT_VERSION, params }
 }
 
 function isSnapshot(x: unknown): x is Snapshot {
@@ -119,10 +140,8 @@ export function applySnapshot(store: PatternStore, snap: Snapshot): void {
 }
 
 /**
- * 挂载持久化写入：watch 13 参数 + placed 引用，debounce 300ms 合并连续 togglePlaced。
+ * 挂载持久化写入：watch 14 参数 + placed 引用，debounce 300ms 合并连续 togglePlaced。
  * 返回 dispose，组件 onUnmounted 调用。
- * 不用 store.$subscribe —— setup-store 对 shallowRef 的 triggerRef 行为不稳，
- * watch 引用变化已由 pages/pattern/index.vue 现有 placed watch 验证可触发。
  */
 export function installPersist(store: PatternStore): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -143,7 +162,8 @@ export function installPersist(store: PatternStore): () => void {
     () => store.showCodes,
     () => store.guide,
     () => store.mergeEnabled,
-    () => store.mergeMode,
+    () => store.spatialEnabled,
+    () => store.paletteEnabled,
     () => store.spatialThreshold,
     () => store.paletteMaxColors,
     () => store.paletteMinCount,

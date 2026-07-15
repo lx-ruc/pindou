@@ -465,7 +465,8 @@ async function onExport(): Promise<void> {
   exporting.value = true
   uni.showLoading({ title: '导出中…', mask: true })
   try {
-    const bp = 30
+    // bp 动态：让 canvas 单维 ≤ ~3500（W×H×4 ≤ ~49MB），防微信 native buffer 超限
+    const bp = Math.min(30, Math.floor(3500 / (Math.max(store.rows, store.cols) + 3.4)))
     const M = Math.round(bp * 1.7)
     const gridW = store.cols * bp + 2 * M
     const gridH = store.rows * bp + 2 * M
@@ -659,7 +660,8 @@ watch(() => store.showZones, () => nextTick(() => render()))
 watch(() => store.showCodes, () => nextTick(() => render()))
 watch(() => store.guide, () => nextTick(() => render()))
 watch(() => store.mergeEnabled, () => nextTick(() => render()))
-watch(() => store.mergeMode, () => nextTick(() => render()))
+watch(() => store.spatialEnabled, () => nextTick(() => render()))
+watch(() => store.paletteEnabled, () => nextTick(() => render()))
 watch(() => store.spatialThreshold, () => nextTick(() => render()))
 watch(() => store.paletteMaxColors, () => nextTick(() => render()))
 watch(() => store.paletteMinCount, () => nextTick(() => render()))

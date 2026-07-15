@@ -15,7 +15,7 @@
 - **SD-1 数据模型**：固定序 `[spatial, palette]` + 每步 `enabled` 标志；**不**做用户可重排的任意 `steps[]`（无 `palette→spatial` 用例，见 SD-2）。store/persist 存 `spatialEnabled`/`paletteEnabled` 两布尔；recompute 按固定序执行启用的步骤。
 - **SD-2 顺序不可换**：spatial 作用在几何、palette 作用在色直方图。`spatial→palette` 让 palette 在更干净的直方图上减色（更温和原理化）；反过来会让 spatial 区域变大变激进、过平滑。**顺序由系统决定、不暴露给用户。**
 - **SD-3 每步开关必要（不能只靠阈值）**：spatial 会吞掉「色差 < threshold 的相邻本意近色」，对卡通渐变阴影有损；调大阈值只降概率不消除，故卡通需 spatial 真关。是否必要见下方「开放实测门」。
-- **SD-4 UI 隐藏流水线（MVP）**：用户只见「卡通/照片」钮 + 各阈值滑块；步开关由 profile 内部定、不暴露。步关闭时其阈值滑块置灰。现有「边界/色号」mode 分段钮被 profile 钮取代。⇒ 流水线对外几乎不可见，风险低。
+- **SD-4 UI 暴露步开关（实现时修订）**：原设想「步开关内部定、不暴露」；实现时修订为**暴露**每步开关（边界关/边界平滑、色号关/色号归并）+ 各阈值滑块（步关时其阈值组隐藏）。理由：① 调参 campaign（§4）需手动切步；② 完全兑现「档位不锁」——每个 lever 用户可调，手动切步 → 派生 profile 变 custom，钮高亮自动跟随。原「边界/色号」单选 mode 钮被拆成两个独立步开关（可同开 = 照片档默认）。
 - **SD-5 快照迁移 = bump v2 + v1→v2 迁移（不丢弃）**：`mergeMode`→步骤是确定性 1:1 映射，迁移 ~10 行；保用户状态优于丢弃（MVP 未发，丢弃也站得住，但迁移近零成本）。
 - **SD-6 性能**：spatial O(cells) 廉价；palette 的 maxColors 贪心 O(colors²×迭代) 是热点（照片档 cap ~40-60 时），调参时观测，必要时封顶迭代数。
 - **SD-7 流水线逻辑放 utils**：抽 `mergePipeline(grid, [{kind,enabled,opts}…])` 纯函数 fold（贴架构缝、可单测）；store 只构造 steps 调用。两步时 helper 较薄，保留为可单测的 Seam。

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mergeSpatial, mergePalette } from '@/utils/colorMerge'
+import { mergeSpatial, mergePalette, mergePipeline, type MergePipelineStep } from '@/utils/colorMerge'
 import type { Lab } from '@/utils/colorLab'
 
 // 测试用注入的 distFn 绕开 ciede2000 数值，语义直观
@@ -115,5 +115,82 @@ describe('mergePalette (模式B: 全局归并)', () => {
     ] // 每色 1 颗，无大色
     const out = mergePalette(g, { minCount: 3, threshold: 100, distFn: alwaysNear })
     expect(new Set(out.flat()).size).toBe(1)
+  })
+})
+
+describe('mergePipeline (有序流水线：固定序按 enabled 折叠)', () => {
+  it('空 steps → 返回输入拷贝（内容不变、新引用）', () => {
+    const g = [['#CCCCCC', '#FF0000'], ['#00FF00', '#0000FF']]
+    const out = mergePipeline(g, 2, 2, [])
+    expect(out).toEqual(g)
+    expect(out).not.toBe(g)
+  })
+
+  it('单步 spatial 等价于 mergeSpatial', () => {
+    const g = Array.from({ length: 5 }, () => new Array(5).fill('#CCCCCC'))
+    g[2][2] = '#C8C8C8'
+    const step: MergePipelineStep = { kind: 'spatial', enabled: true, spatialThreshold: 5 }
+    const out = mergePipeline(g, 5, 5, [step], { distFn: alwaysNear })
+    const ref = mergeSpatial(g, 5, 5, { threshold: 5, distFn: alwaysNear })
+    expect(out).toEqual(ref)
+  })
+
+  it('单步 palette 等价于 mergePalette', () => {
+    const g = [['#CCCCCC', '#CCCCCC', '#FF0000']]
+    const step: MergePipelineStep = { kind: 'palette', enabled: true, paletteMinCount: 3, paletteThreshold: 100 }
+    const out = mergePipeline(g, 1, 3, [step], { distFn: alwaysNear })
+    const ref = mergePalette(g, { minCount: 3, threshold: 100, distFn: alwaysNear })
+    expect(out).toEqual(ref)
+  })
+
+  it('两步 = 顺序组合（spatial 后 palette）', () => {
+    const g = Array.from({ length: 5 }, () => new Array(5).fill('#CCCCCC'))
+    g[2][2] = '#C8C8C8'
+    g[4][4] = '#FF0000'
+    const steps: MergePipelineStep[] = [
+      { kind: 'spatial', enabled: true, spatialThreshold: 5 },
+      { kind: 'palette', enabled: true, paletteMinCount: 3, paletteThreshold: 100 },
+    ]
+    const out = mergePipeline(g, 5, 5, steps, { distFn: alwaysNear })
+    const ref = mergePalette(
+      mergeSpatial(g, 5, 5, { threshold: 5, distFn: alwaysNear }),
+      { minCount: 3, threshold: 100, distFn: alwaysNear }
+    )
+    expect(out).toEqual(ref)
+  })
+
+  it('enabled=false 的步骤被跳过', () => {
+    const g = [['#CCCCCC', '#FF0000']]
+    const steps: MergePipelineStep[] = [
+      { kind: 'spatial', enabled: false, spatialThreshold: 5 },
+      { kind: 'palette', enabled: false, paletteMinCount: 3, paletteThreshold: 100 },
+    ]
+    const out = mergePipeline(g, 1, 2, steps, { distFn: alwaysNear })
+    expect(out).toEqual(g)
+    expect(out).not.toBe(g)
+  })
+
+  it('混合 enabled：只跑开启的步骤', () => {
+    const g = Array.from({ length: 5 }, () => new Array(5).fill('#CCCCCC'))
+    g[2][2] = '#C8C8C8'
+    const steps: MergePipelineStep[] = [
+      { kind: 'spatial', enabled: false, spatialThreshold: 5 },
+      { kind: 'palette', enabled: true, paletteMinCount: 3, paletteThreshold: 100 },
+    ]
+    const out = mergePipeline(g, 5, 5, steps, { distFn: alwaysNear })
+    const ref = mergePalette(g, { minCount: 3, threshold: 100, distFn: alwaysNear })
+    expect(out).toEqual(ref)
+  })
+
+  it('immutable：输入不被修改', () => {
+    const g = Array.from({ length: 3 }, () => new Array(3).fill('#CCCCCC'))
+    g[1][1] = '#C8C8C8'
+    const snap = JSON.stringify(g)
+    mergePipeline(g, 3, 3, [{ kind: 'spatial', enabled: true, spatialThreshold: 5 }], { distFn: alwaysNear })
+    expect(JSON.stringify(g)).toBe(snap)
+  })
+
+  it('边界：空 grid 返回 []', () => {
+    expect(mergePipeline([], 0, 0, [{ kind: 'spatial', enabled: true, spatialThreshold: 5 }])).toEqual([])
   })
 })

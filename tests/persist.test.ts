@@ -17,6 +17,24 @@ const PARAMS = {
   showCodes: true,
   guide: true,
   mergeEnabled: true,
+  spatialEnabled: false,
+  paletteEnabled: true,
+  spatialThreshold: 10,
+  paletteMaxColors: 0,
+  paletteMinCount: 3,
+  paletteThreshold: 12,
+} as const
+
+// v1 快照参数（含 mergeMode，无步开关），用于迁移测试
+const V1_PARAMS = {
+  brand: 'MARD',
+  mode: 'view',
+  size: 50,
+  zoom: 1,
+  showZones: true,
+  showCodes: true,
+  guide: true,
+  mergeEnabled: true,
   mergeMode: 'palette',
   spatialThreshold: 10,
   paletteMaxColors: 0,
@@ -70,9 +88,11 @@ describe('persist', () => {
     const { store } = makeFakeStore({ placed: [[true, false], [false, true]] })
     const snap = buildSnapshot(store)
     const back = deserialize(serialize(snap)) as Snapshot
-    expect(back.v).toBe(1)
+    expect(back.v).toBe(2)
     expect(back.params.size).toBe(50)
-    expect(back.params.mergeMode).toBe('palette')
+    expect(back.params.spatialEnabled).toBe(false)
+    expect(back.params.paletteEnabled).toBe(true)
+    expect(back.params.mergeMode).toBeUndefined()
     expect(back.rows).toBe(2)
     expect(back.cols).toBe(2)
     expect(back.hexGrid).toEqual([
@@ -82,14 +102,14 @@ describe('persist', () => {
     expect(back.placed).toEqual([[true, false], [false, true]])
   })
 
-  it('version 字段恒为 1', () => {
-    expect(buildSnapshot(makeFakeStore().store).v).toBe(1)
+  it('version 字段恒为 2', () => {
+    expect(buildSnapshot(makeFakeStore().store).v).toBe(2)
   })
 
   it('维度校验：placed 行数不符 → applySnapshot 丢弃进度，重置全 false（行数对齐 rows）', () => {
     const { store, calls } = makeFakeStore()
     const bad: Snapshot = {
-      v: 1,
+      v: 2,
       params: { ...PARAMS } as Snapshot['params'],
       rows: 2,
       cols: 2,
@@ -112,7 +132,7 @@ describe('persist', () => {
   it('维度校验：placed 列数不符 → 同样重置全 false', () => {
     const { store, calls } = makeFakeStore()
     const bad: Snapshot = {
-      v: 1,
+      v: 2,
       params: { ...PARAMS } as Snapshot['params'],
       rows: 2,
       cols: 2,
@@ -140,8 +160,45 @@ describe('persist', () => {
     expect(deserialize('')).toBeNull()
   })
 
-  it('deserialize 版本号非 1 → null', () => {
-    expect(deserialize(JSON.stringify({ v: 2, params: {}, hexGrid: [], placed: [] }))).toBeNull()
+  it('deserialize 未知版本（v=3）→ null', () => {
+    expect(deserialize(JSON.stringify({ v: 3, params: {}, hexGrid: [], placed: [] }))).toBeNull()
+  })
+
+  it('deserialize v=1 → 迁移为 v2（mergeMode=palette → palette 开/spatial 关）', () => {
+    const v1snap = {
+      v: 1,
+      params: { ...V1_PARAMS },
+      rows: 1,
+      cols: 1,
+      srcW: 10,
+      srcH: 10,
+      imgAspect: 1,
+      hexGrid: [['#FFFFFF']],
+      placed: [[false]],
+    }
+    const back = deserialize(JSON.stringify(v1snap)) as Snapshot
+    expect(back).not.toBeNull()
+    expect(back.v).toBe(2)
+    expect(back.params.mergeMode).toBeUndefined()
+    expect(back.params.paletteEnabled).toBe(true)
+    expect(back.params.spatialEnabled).toBe(false)
+  })
+
+  it('deserialize v=1 mergeMode=spatial → spatialEnabled=true / paletteEnabled=false', () => {
+    const v1snap = {
+      v: 1,
+      params: { ...V1_PARAMS, mergeMode: 'spatial' },
+      rows: 1,
+      cols: 1,
+      srcW: 10,
+      srcH: 10,
+      imgAspect: 1,
+      hexGrid: [['#FFFFFF']],
+      placed: [[false]],
+    }
+    const back = deserialize(JSON.stringify(v1snap)) as Snapshot
+    expect(back.params.spatialEnabled).toBe(true)
+    expect(back.params.paletteEnabled).toBe(false)
   })
 
   it('buildSnapshot immutable：改快照不污染 store 原数组', () => {
@@ -156,7 +213,7 @@ describe('persist', () => {
   it('applySnapshot：完整恢复参数 + 几何 + 图纸 + 进度（调用 applyRestored）', () => {
     const { store, calls } = makeFakeStore()
     const snap: Snapshot = {
-      v: 1,
+      v: 2,
       params: {
         ...PARAMS,
         brand: 'COCO',
@@ -167,7 +224,8 @@ describe('persist', () => {
         showCodes: false,
         guide: false,
         mergeEnabled: false,
-        mergeMode: 'spatial',
+        spatialEnabled: true,
+        paletteEnabled: false,
         spatialThreshold: 15,
         paletteMaxColors: 8,
         paletteMinCount: 5,
@@ -192,6 +250,7 @@ describe('persist', () => {
     expect(calls[0].rows).toBe(2)
     expect(calls[0].cols).toBe(2)
     expect((calls[0].params as { brand: string }).brand).toBe('COCO')
+    expect((calls[0].params as { spatialEnabled: boolean }).spatialEnabled).toBe(true)
     expect(calls[0].hexGrid).toEqual([
       ['#AAAAAA', '#BBBBBB'],
       ['#CCCCCC', '#DDDDDD'],
@@ -205,7 +264,7 @@ describe('persist', () => {
   it('applySnapshot immutable：传给 applyRestored 的是拷贝，改之不影响快照', () => {
     const { store, calls } = makeFakeStore()
     const snap: Snapshot = {
-      v: 1,
+      v: 2,
       params: { ...PARAMS } as Snapshot['params'],
       rows: 1,
       cols: 1,
