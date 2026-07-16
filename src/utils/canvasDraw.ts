@@ -174,7 +174,7 @@ export function drawComposed(
   const gridW = cols * bp + 2 * M
   const gridH = rows * bp + 2 * M
   const titleH = 46
-  const itemW = 176
+  const itemW = 96
   const itemH = 42
   const legendCols = Math.max(1, Math.min(sortedItems.length, Math.floor((gridW + 40) / itemW)))
   const legendRows = Math.ceil(sortedItems.length / legendCols)
@@ -203,7 +203,7 @@ export function drawComposed(
   let ly = titleH + gridH + 30
   g.fillStyle = '#23202E'
   g.font = '700 16px sans-serif'
-  g.fillText('色号 → HEX → 数量', 20, ly)
+  g.fillText('色号 → 数量', 20, ly)
   ly += 12
 
   sortedItems.forEach(([hex, n], i) => {
@@ -212,24 +212,23 @@ export function drawComposed(
     const x = 20 + col * itemW
     const y = ly + row * itemH
     const code = BRAND_CODES[brand][hex]
+    // 色块
     g.fillStyle = hex
     g.strokeStyle = '#23202E'
     g.lineWidth = 2.5
     g.beginPath()
-    g.rect(x + 2, y + 2, 28, 28)
+    g.rect(x + 2, y + 6, 28, 28)
     g.fill()
     g.stroke()
-    g.fillStyle = '#23202E'
+    // 色号（上）+ 数量（下，替代原 HEX 位）
     g.textAlign = 'left'
     g.textBaseline = 'middle'
-    g.font = '700 17px sans-serif'
-    g.fillText(code, x + 38, y + 9)
-    g.fillStyle = '#615C72'
-    g.font = '700 11px sans-serif'
-    g.fillText(hex, x + 38, y + 24)
-    g.fillStyle = '#F77F00'
+    g.fillStyle = '#23202E'
     g.font = '700 16px sans-serif'
-    g.fillText('×' + n, x + 140, y + 16)
+    g.fillText(code, x + 38, y + 14)
+    g.fillStyle = '#F77F00'
+    g.font = '700 13px sans-serif'
+    g.fillText('×' + n, x + 38, y + 30)
   })
 
   return { width: W, height: H }

@@ -21,7 +21,7 @@ function buildSVGBody(
   const gridW = cols * bp + 2 * M
   const gridH = rows * bp + 2 * M
   const titleH = 60
-  const itemW = 200
+  const itemW = 100
   const itemH = 44
   const legendCols = Math.max(1, Math.min(sortedItems.length, Math.floor((gridW + 40) / itemW)))
   const legendRows = Math.ceil(sortedItems.length / legendCols)
@@ -61,9 +61,9 @@ function buildSVGBody(
 
   // 图例标题
   const legY = gridY + gridH + 30
-  parts.push(`<text x="40" y="${legY}" font-family="sans-serif" font-size="18" font-weight="700" fill="#23202E">色号 → HEX → 数量</text>`)
+  parts.push(`<text x="40" y="${legY}" font-family="sans-serif" font-size="18" font-weight="700" fill="#23202E">色号 → 数量</text>`)
 
-  // 图例 items
+  // 图例 items：色块 + 色号（上）/ 数量（下），无 HEX
   sortedItems.forEach(([hex, n], i) => {
     const col = i % legendCols
     const row = Math.floor(i / legendCols)
@@ -71,9 +71,8 @@ function buildSVGBody(
     const y = legY + 20 + row * itemH
     const code = BRAND_CODES[brand][hex] || ''
     parts.push(`<rect x="${x}" y="${y}" width="28" height="28" fill="${hex}" stroke="#23202E" stroke-width="2"/>`)
-    parts.push(`<text x="${x + 38}" y="${y + 20}" font-family="sans-serif" font-size="17" font-weight="700" fill="#23202E">${escape(code)}</text>`)
-    parts.push(`<text x="${x + 90}" y="${y + 20}" font-family="monospace" font-size="13" fill="#615C72">${hex}</text>`)
-    parts.push(`<text x="${x + 160}" y="${y + 20}" font-family="sans-serif" font-size="14" font-weight="700" fill="#F77F00">×${n}</text>`)
+    parts.push(`<text x="${x + 38}" y="${y + 17}" font-family="sans-serif" font-size="16" font-weight="700" fill="#23202E">${escape(code)}</text>`)
+    parts.push(`<text x="${x + 38}" y="${y + 35}" font-family="sans-serif" font-size="13" font-weight="700" fill="#F77F00">×${n}</text>`)
   })
 
   return { svg: parts.join(''), width: W, height: H }
@@ -99,7 +98,7 @@ export function patternToHTML(
 
   const legend = sortedItems.map(([hex, n]) => {
     const code = BRAND_CODES[brand][hex] || ''
-    return `<div class="leg-item"><div class="leg-swatch" style="background:${hex}"></div><span class="leg-code">${escape(code)}</span><span class="leg-hex">${hex}</span><span class="leg-count">×${n}</span></div>`
+    return `<div class="leg-item"><div class="leg-swatch" style="background:${hex}"></div><div class="leg-text"><span class="leg-code">${escape(code)}</span><span class="leg-count">×${n}</span></div></div>`
   }).join('')
 
   return `<!DOCTYPE html>
@@ -115,15 +114,15 @@ export function patternToHTML(
   .legend { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px; }
   .leg-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: #fff; border: 2px solid #23202E; border-radius: 8px; box-shadow: 2px 2px 0 #23202E; }
   .leg-swatch { width: 20px; height: 20px; border: 1.5px solid #23202E; border-radius: 4px; }
+  .leg-text { display: flex; flex-direction: column; line-height: 1.15; }
   .leg-code { font-weight: 700; font-size: 14px; }
-  .leg-hex { font-size: 12px; color: #615C72; font-family: monospace; }
-  .leg-count { font-weight: 700; color: #F77F00; }
+  .leg-count { font-weight: 700; color: #F77F00; font-size: 12px; }
 </style>
 </head>
 <body>
 <h1>拼豆图纸 · ${escape(brand)} · ${cols}×${rows} · ${sortedItems.length} 色 · ${totalBeads} 颗</h1>
 <div class="grid">${cells}</div>
-<h2 style="font-size:16px;margin:24px 0 8px">色号 → HEX → 数量</h2>
+<h2 style="font-size:16px;margin:24px 0 8px">色号 → 数量</h2>
 <div class="legend">${legend}</div>
 </body>
 </html>`
